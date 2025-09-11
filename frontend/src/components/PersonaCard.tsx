@@ -10,7 +10,7 @@ interface PersonaCardProps {
 const PersonaCard: React.FC<PersonaCardProps> = ({ persona, isSelected, onSelect }) => {
   return (
     <div
-      className={`p-6 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+      className={`p-6 border-2 rounded-lg cursor-pointer transition-all duration-200 min-h-[400px] ${
         isSelected
           ? 'border-blue-500 bg-blue-50 shadow-md'
           : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
@@ -37,12 +37,34 @@ const PersonaCard: React.FC<PersonaCardProps> = ({ persona, isSelected, onSelect
       </div>
       
       <div className="space-y-2 text-sm text-gray-600">
-        {Object.entries(persona.details).slice(0, 5).map(([key, value]) => (
-          <div key={key} className="flex">
-            <span className="font-medium w-24 text-gray-700">{key}:</span>
-            <span className="flex-1">{value}</span>
+        {/* 主要な情報を表示 */}
+        {Object.entries(persona.details)
+          .filter(([key, value]) => 
+            key !== 'raw_text' && 
+            key !== 'ペルソナ名' && 
+            value && 
+            typeof value === 'string' && 
+            value.trim().length > 0
+          )
+          .slice(0, 6)
+          .map(([key, value]) => (
+            <div key={key} className="flex">
+              <span className="font-medium w-20 text-gray-700 shrink-0">{key}:</span>
+              <span className="flex-1 ml-2">{value}</span>
+            </div>
+          ))}
+        
+        {/* その他の詳細情報（raw_textから抽出） */}
+        {persona.details.raw_text && (
+          <div className="mt-4 pt-3 border-t border-gray-200">
+            <div className="mb-2">
+              <span className="font-medium text-gray-700 text-xs uppercase tracking-wide">その他の詳細</span>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-md text-xs leading-relaxed max-h-40 overflow-y-auto border border-gray-100">
+              <div className="whitespace-pre-wrap text-gray-700">{persona.details.raw_text}</div>
+            </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

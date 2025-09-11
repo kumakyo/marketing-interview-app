@@ -17,6 +17,11 @@ import logging
 
 # 環境変数を読み込み
 load_dotenv()
+# プロジェクトルートの.envファイルも読み込み
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_file = os.path.join(project_root, '.env')
+if os.path.exists(env_file):
+    load_dotenv(env_file)
 
 # ログ設定
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +37,12 @@ app = FastAPI(
 # CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.jsのデフォルトポート
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:3001", 
+        "http://127.0.0.1:3000", 
+        "http://127.0.0.1:3001"
+    ],  # Next.jsの複数ポートに対応
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -114,27 +124,115 @@ def generate_text(prompt, model_name="models/gemini-1.5-flash", temperature=0.8)
 def parse_personas(personas_text):
     """ペルソナテキストを解析する関数"""
     parsed_personas = []
-    raw_personas = [p.strip() for p in personas_text.split('ペルソナ') if p.strip()]
+    
+    # より柔軟なペルソナ分割（数字や番号で区切る）
+    persona_patterns = [
+        r'ペルソナ\d+[：:]',
+        r'\d+[\.．]\s*ペルソナ',
+        r'【ペルソナ\d+】',
+        r'■\s*ペルソナ\d+',
+        r'^\d+[\.．]',  # 単純な番号
+    ]
+    
+    # ペルソナテキストをより正確に分割
+    raw_personas = []
+    
+    # 改良された正規表現でペルソナブロックを抽出
+    persona_pattern = r'ペルソナ(\d+)[：:]?\s*([^\n]+)\n((?:(?!ペルソナ\d+).)*)'
+    matches = re.findall(persona_pattern, personas_text, re.DOTALL)
+    
+    if matches:
+        # マッチした場合、ペルソナ番号、名前、詳細を組み合わせる
+        for persona_num, persona_name, details in matches:
+            persona_block = f"ペルソナ{persona_num}: {persona_name}\n{details.strip()}"
+            raw_personas.append(persona_block)
+    else:
+        # フォールバック: 「ペルソナ」で単純分割
+        if 'ペルソナ' in personas_text:
+            parts = re.split(r'(?=ペルソナ\d+)', personas_text)
+            raw_personas = [p.strip() for p in parts if p.strip() and 'ペルソナ' in p]
+        else:
+            # 番号で区切る
+            parts = re.split(r'\n(?=\d+[\.．])', personas_text)
+            raw_personas = [p.strip() for p in parts if p.strip()]
+    
+    logger.info(f"分割されたペルソナ数: {len(raw_personas)}")
     
     for i, p_text in enumerate(raw_personas):
-        details = {'raw_text': p_text}
-        lines = p_text.split('\n')
+        # テキストをクリーンアップ（*や不要な文字を除去）
+        cleaned_text = re.sub(r'^\*+\s*', '', p_text, flags=re.MULTILINE)
+        cleaned_text = re.sub(r'\*', '', cleaned_text)
         
+        details = {}
+        lines = [line.strip() for line in cleaned_text.split('\n') if line.strip()]
+        
+        # ペルソナ名を最初の行から抽出
+        persona_name = f"ペルソナ{i+1}"
+        if lines:
+            first_line = lines[0]
+            # "ペルソナN: 名前" の形式から名前を抽出
+            name_match = re.search(r'ペルソナ\d+[：:]\s*(.+)', first_line)
+            if name_match:
+                persona_name = name_match.group(1).strip()
+        
+        # 各行から情報を抽出（より正確に）
         for line in lines:
-            if ':' in line:
-                key, value = line.split(':', 1)
-                details[key.strip()] = value.strip()
+            if ':' in line or '：' in line:
+                separator = ':' if ':' in line else '：'
+                parts = line.split(separator, 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+                    
+                    # キーから不要な文字を除去
+                    key = re.sub(r'^[-•\*\s]+', '', key)
+                    
+                    # ペルソナ行をスキップ
+                    if 'ペルソナ' in key and value == persona_name:
+                        continue
+                    
+                    # 特定のキーを標準化
+                    if '年齢' in key:
+                        details['年齢'] = value
+                    elif '性別' in key:
+                        details['性別'] = value
+                    elif '職業' in key:
+                        details['職業'] = value
+                    elif '年収' in key:
+                        details['年収帯'] = value
+                    elif '居住' in key:
+                        details['居住地'] = value
+                    elif '家族' in key:
+                        details['家族構成'] = value
+                    elif '趣味' in key or '余暇' in key:
+                        details['趣味・余暇'] = value
+                    elif '関心' in key or '悩み' in key:
+                        details['関心事・悩み'] = value
+                    elif key and value and len(key) < 20:  # 短いキーのみ保存
+                        details[key] = value
         
-        if 'ペルソナ名' not in details:
-            name_match = re.search(r'ペルソナ\d+:\s*(.+)', lines[0] if lines else "")
-            details['ペルソナ名'] = name_match.group(1).strip() if name_match else f"ペルソナ{i+1}"
+        # ペルソナ名を詳細に追加
+        details['ペルソナ名'] = persona_name
+        
+        # 必要最小限の詳細のみを保持（ただしraw_textも含める）
+        filtered_details = {}
+        display_keys = ['ペルソナ名', '年齢', '性別', '職業', '年収帯', '居住地', '家族構成', '趣味・余暇', '関心事・悩み']
+        
+        for key in display_keys:
+            if key in details:
+                filtered_details[key] = details[key]
+        
+        # raw_textを詳細情報に含める（フロントエンドで表示用）
+        filtered_details['raw_text'] = cleaned_text
         
         persona = Persona(
-            name=details.get('ペルソナ名', f'ペルソナ{i+1}'),
-            details=details,
-            raw_text=p_text
+            name=persona_name,
+            details=filtered_details,
+            raw_text=cleaned_text
         )
         parsed_personas.append(persona)
+        
+        logger.info(f"ペルソナ{i+1}: {persona_name} - 詳細数: {len(filtered_details)}")
     
     return parsed_personas
 
@@ -152,30 +250,88 @@ async def generate_personas(request: PersonaGenerationRequest):
         persona_prompt = f"""
         あなたはマーケティングの専門家です。
         「{request.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ5人のペルソナを作成してください。
-        各ペルソナについて、以下の詳細を含めてください。
-        - ペルソナ名
-        - 年齢
-        - 性別
-        - 職業
-        - 年収帯
-        - 居住地
-        - 家族構成
-        - 趣味・余暇の過ごし方
-        - 関心事・主な悩み
-        - {request.topic}に対する現状の利用状況や意識
-        - 性格・価値観
+        
+        各ペルソナについて、以下の詳細を含めてください。厳密にこの形式で出力してください：
 
-        出力は、各ペルソナを明確に区切って箇条書き形式で記述し、先頭は「ペルソナN: [ペルソナ名]」で始めてください。
+        ペルソナ1: [具体的な名前]
+        年齢: [年齢]
+        性別: [性別]
+        職業: [職業]
+        年収帯: [年収帯]
+        居住地: [居住地]
+        家族構成: [家族構成]
+        趣味・余暇: [趣味・余暇の過ごし方]
+        関心事・悩み: [関心事・主な悩み]
+
+        ペルソナ2: [具体的な名前]
+        年齢: [年齢]
+        性別: [性別]
+        職業: [職業]
+        年収帯: [年収帯]
+        居住地: [居住地]
+        家族構成: [家族構成]
+        趣味・余暇: [趣味・余暇の過ごし方]
+        関心事・悩み: [関心事・主な悩み]
+
+        ペルソナ3: [具体的な名前]
+        年齢: [年齢]
+        性別: [性別]
+        職業: [職業]
+        年収帯: [年収帯]
+        居住地: [居住地]
+        家族構成: [家族構成]
+        趣味・余暇: [趣味・余暇の過ごし方]
+        関心事・悩み: [関心事・主な悩み]
+
+        ペルソナ4: [具体的な名前]
+        年齢: [年齢]
+        性別: [性別]
+        職業: [職業]
+        年収帯: [年収帯]
+        居住地: [居住地]
+        家族構成: [家族構成]
+        趣味・余暇: [趣味・余暇の過ごし方]
+        関心事・悩み: [関心事・主な悩み]
+
+        ペルソナ5: [具体的な名前]
+        年齢: [年齢]
+        性別: [性別]
+        職業: [職業]
+        年収帯: [年収帯]
+        居住地: [居住地]
+        家族構成: [家族構成]
+        趣味・余暇: [趣味・余暇の過ごし方]
+        関心事・悩み: [関心事・主な悩み]
+
+        注意点：
+        - 具体的で現実的な名前を使用してください
+        - 「{request.topic}」に関連する多様な価値観を持つペルソナを作成してください
+        - アスタリスク（*）や箇条書き記号は使用しないでください
+        - 各項目は簡潔に記述してください
         """
         
         personas_text = generate_text(persona_prompt)
+        logger.info(f"生成されたペルソナテキスト: {personas_text[:500]}...")
+        
         personas = parse_personas(personas_text)
+        logger.info(f"パースされたペルソナ数: {len(personas)}")
         
         current_session["personas"] = personas
         current_session["start_time"] = time.time()
         
+        # レスポンス用のペルソナデータを準備
+        persona_list = []
+        for i, p in enumerate(personas):
+            persona_data = {
+                "id": i, 
+                "name": p.name, 
+                "details": p.details
+            }
+            logger.info(f"ペルソナ{i}: 名前={p.name}, 詳細キー数={len(p.details)}")
+            persona_list.append(persona_data)
+        
         return {
-            "personas": [{"id": i, "name": p.name, "details": p.details} for i, p in enumerate(personas)],
+            "personas": persona_list,
             "raw_text": personas_text
         }
     
@@ -231,20 +387,134 @@ async def select_personas(request: PersonaSelectionRequest):
         raise HTTPException(status_code=500, detail=f"ペルソナ選択に失敗しました: {e}")
 
 @app.get("/api/default-questions")
-async def get_default_questions():
+async def get_default_questions(topic: Optional[str] = None):
     """デフォルトの質問リストを取得するエンドポイント"""
-    questions = [
-        "ご自身の簡単な自己紹介（年齢、居住地、職業、家族構成など）をお願いします。",
-        "休日の過ごし方について教えてください。どんな人と、どんなことをすることが多いですか？",
-        "最近ハマっていること、楽しみにしていることは何ですか？",
-        "外食・レジャー・趣味にどのくらいお金を使いますか？どんな基準で使い先を決めていますか？",
-        "カラオケに行きたいなと思うのはどんなときですか？",
-        "歌うこと以外に、カラオケでやっていることはありますか？",
-        "カラオケで歌うことで、どんな気持ちになりますか？",
-        "カラオケがなくなったら困ると思いますか？それはなぜですか？"
-    ]
     
-    return {"questions": questions}
+    # トピック特化型の質問プロンプトを作成
+    if topic:
+        question_prompt = f"""
+        あなたはマーケティングリサーチの専門家です。
+        「{topic}」に関する深掘りマーケティングインタビューで使用する、効果的な質問リストを20個作成してください。
+        
+        以下の観点を含む質問を作成してください：
+        1. 基本情報・ライフスタイル（3-4問）
+        2. 「{topic}」に対する現在の利用状況・認識（4-5問）
+        3. 「{topic}」の利用体験・満足度（4-5問）
+        4. 「{topic}」に関するニーズ・課題の深掘り（4-5問）
+        5. 「{topic}」の感情価値・将来への期待（3-4問）
+        
+        質問は以下の条件を満たしてください：
+        - 回答者が「{topic}」について具体的なエピソードを話しやすい設計
+        - オープンエンドな質問形式
+        - 「{topic}」に特化した内容で、潜在的なニーズや課題を引き出せる設計
+        - 自然な会話の流れになるような順番
+        - マーケティング戦略立案に有用な洞察が得られる質問
+        
+        出力形式：
+        1. [質問文]
+        2. [質問文]
+        ...
+        20. [質問文]
+        """
+    else:
+        question_prompt = """
+        あなたはマーケティングリサーチの専門家です。
+        マーケティングインタビューで使用する、汎用的で効果的な質問リストを20個作成してください。
+        
+        以下の観点を含む質問を作成してください：
+        1. 基本情報・ライフスタイル（3-4問）
+        2. 消費行動・価値観（4-5問）
+        3. 商品・サービス利用体験（4-5問）
+        4. ニーズ・課題の深掘り（4-5問）
+        5. 感情・体験価値（3-4問）
+        
+        質問は以下の条件を満たしてください：
+        - 回答者が具体的なエピソードを話しやすい設計
+        - オープンエンドな質問形式
+        - 特定の商品・サービスに限定しない汎用的な内容
+        - 潜在的なニーズや課題を引き出せる設計
+        - 自然な会話の流れになるような順番
+        
+        出力形式：
+        1. [質問文]
+        2. [質問文]
+        ...
+        20. [質問文]
+        """
+    
+    try:
+        # LLMで質問を生成
+        generated_questions_text = generate_text(question_prompt, temperature=0.7)
+        
+        # 生成されたテキストから質問を抽出
+        questions = []
+        lines = [line.strip() for line in generated_questions_text.split('\n') if line.strip()]
+        
+        for line in lines:
+            # 番号付きの質問を抽出
+            match = re.match(r'^\d+[\.．]\s*(.+)', line)
+            if match:
+                question = match.group(1).strip()
+                questions.append(question)
+        
+        # 生成に失敗した場合のフォールバック
+        if len(questions) < 15:
+            logger.warning("LLMでの質問生成が不十分です。デフォルト質問を使用します。")
+            questions = [
+                "ご自身の簡単な自己紹介（年齢、居住地、職業、家族構成など）をお願いします。",
+                "普段の1日の過ごし方について教えてください。",
+                "休日の過ごし方について教えてください。どんな人と、どんなことをすることが多いですか？",
+                "最近ハマっていること、楽しみにしていることは何ですか？",
+                "情報収集はどのような方法で行っていますか？（SNS、ウェブサイト、友人など）",
+                "買い物をするときに重視することは何ですか？",
+                "外食・レジャー・趣味にどのくらいお金を使いますか？どんな基準で使い先を決めていますか？",
+                "新しい商品やサービスを知ったとき、どのような行動を取りますか？",
+                "お気に入りのブランドや企業はありますか？その理由は何ですか？",
+                "最近購入した商品・サービスで特に満足したものはありますか？",
+                "逆に、期待に応えなかった商品・サービスはありますか？どのような点でしょうか？",
+                "友人や家族に何かを勧めるときは、どのような基準で判断しますか？",
+                "日常生活で困っていることや不便に感じていることはありますか？",
+                "理想的な商品・サービスがあるとしたら、どのようなものでしょうか？",
+                "価格と品質、どちらを重視しますか？その理由は？",
+                "ブランドに対してどのような印象を持ちますか？ブランドは重要ですか？",
+                "新しいことを試すのは好きですか？それとも慣れ親しんだものを選びますか？",
+                "購入前にどのような情報を調べることが多いですか？",
+                "他の人の意見やレビューは購入判断にどの程度影響しますか？",
+                "将来的に挑戦したいこと、欲しいものはありますか？"
+            ]
+        
+        # 最大20個に制限
+        questions = questions[:20]
+        
+        logger.info(f"生成された質問数: {len(questions)}")
+        return {"questions": questions}
+        
+    except Exception as e:
+        logger.error(f"質問生成エラー: {e}")
+        # エラー時のフォールバック
+        fallback_questions = [
+            "ご自身の簡単な自己紹介（年齢、居住地、職業、家族構成など）をお願いします。",
+            "普段の1日の過ごし方について教えてください。",
+            "休日の過ごし方について教えてください。どんな人と、どんなことをすることが多いですか？",
+            "最近ハマっていること、楽しみにしていることは何ですか？",
+            "情報収集はどのような方法で行っていますか？（SNS、ウェブサイト、友人など）",
+            "買い物をするときに重視することは何ですか？",
+            "外食・レジャー・趣味にどのくらいお金を使いますか？どんな基準で使い先を決めていますか？",
+            "新しい商品やサービスを知ったとき、どのような行動を取りますか？",
+            "お気に入りのブランドや企業はありますか？その理由は何ですか？",
+            "最近購入した商品・サービスで特に満足したものはありますか？",
+            "逆に、期待に応えなかった商品・サービスはありますか？どのような点でしょうか？",
+            "友人や家族に何かを勧めるときは、どのような基準で判断しますか？",
+            "日常生活で困っていることや不便に感じていることはありますか？",
+            "理想的な商品・サービスがあるとしたら、どのようなものでしょうか？",
+            "価格と品質、どちらを重視しますか？その理由は？",
+            "ブランドに対してどのような印象を持ちますか？ブランドは重要ですか？",
+            "新しいことを試すのは好きですか？それとも慣れ親しんだものを選びますか？",
+            "購入前にどのような情報を調べることが多いですか？",
+            "他の人の意見やレビューは購入判断にどの程度影響しますか？",
+            "将来的に挑戦したいこと、欲しいものはありますか？"
+        ]
+        return {"questions": fallback_questions}
 
 @app.post("/api/conduct-interview")
 async def conduct_interview(request: InterviewRequest):
@@ -389,6 +659,265 @@ async def generate_analysis():
     except Exception as e:
         logger.error(f"分析生成エラー: {e}")
         raise HTTPException(status_code=500, detail=f"分析の生成に失敗しました: {e}")
+
+@app.post("/api/generate-hypothesis")
+async def generate_hypothesis():
+    """初回インタビュー結果から仮説と追加質問を生成するエンドポイント"""
+    try:
+        if not current_session["selected_personas"]:
+            raise HTTPException(status_code=400, detail="インタビューデータがありません")
+        
+        # 各ペルソナのインタビュー要約を作成
+        summaries = {}
+        for persona in current_session["selected_personas"]:
+            session = current_session["interview_sessions"][persona.name]
+            history = session["history"]
+            
+            if not history:
+                continue
+            
+            # インタビュー内容を要約
+            interview_content = ""
+            for result in history:
+                interview_content += f"質問: {result['question']}\n"
+                interview_content += f"回答: {result['main_answer']}\n"
+                for follow_up in result.get('follow_ups', []):
+                    interview_content += f"更問: {follow_up['question']}\n"
+                    interview_content += f"更問回答: {follow_up['answer']}\n"
+                interview_content += "\n"
+            
+            summary_prompt = f"""
+            以下のペルソナへのインタビュー内容を読み、重要なポイントを簡潔に要約してください。
+            
+            ペルソナ情報:
+            {persona.raw_text}
+            
+            インタビュー内容:
+            {interview_content}
+            """
+            
+            summary = generate_text(summary_prompt, temperature=0.5)
+            summaries[persona.name] = summary
+        
+        # 初回分析を生成
+        all_summaries = '\n\n'.join([f"--- {name}さんの要約 ---\n{summary}" for name, summary in summaries.items()])
+        
+        analysis_prompt = f"""
+        あなたはトップクラスのマーケティングアナリストです。
+        以下の3名のペルソナのインタビュー要約を深く読み解き、詳細なインサイト分析レポートを作成してください。
+        
+        インタビュー要約:
+        {all_summaries}
+        
+        【レポート形式】
+        1. **顧客インサイトの要約**: 各ペルソナの回答から得られた、顧客の心理や行動に関する重要な洞察をまとめます。
+        2. **共通点と相違点**: 3名のペルソナ間の回答の共通点と、特に注目すべき相違点を分析します。
+        3. **マーケティングの示唆**: この分析結果から、どのようなマーケティング戦略やアプローチが考えられるか、具体的な示唆を記述します。
+        4. **未解決の疑問点**: インタビューだけでは明確にならなかった、さらなる調査が必要な点を挙げます。
+        """
+        
+        initial_analysis_result = generate_text(analysis_prompt)
+        
+        # 仮説と追加質問を生成
+        hypothesis_prompt = f"""
+        あなたは戦略プランナーです。
+        先ほどのインサイト分析レポートを基に、次のアクションに繋がる「マーケティング仮説」と、その仮説を検証するための「追加インタビュー質問」を作成してください。
+        
+        分析レポート:
+        {initial_analysis_result}
+        
+        【出力形式】
+        **マーケティング仮説**:
+        - [仮説1]
+        - [仮説2]
+        - [仮説3]
+
+        **追加インタビュー質問**:
+        - [仮説を検証するための質問1]
+        - [仮説を検証するための質問2]
+        - [仮説を検証するための質問3]
+        - [仮説を検証するための質問4]
+        - [仮説を検証するための質問5]
+
+        ※追加質問は、仮説検証に特化し、具体的で単一の論点に絞った質問を5個作成してください。
+        """
+        
+        hypothesis_and_questions_text = generate_text(hypothesis_prompt)
+        
+        # 追加質問を抽出
+        new_questions_match = re.search(r'追加インタビュー質問[：:]\s*\n(.+)', hypothesis_and_questions_text, re.DOTALL)
+        extracted_new_questions = []
+        if new_questions_match:
+            raw_questions_block = new_questions_match.group(1).strip()
+            extracted_new_questions = re.findall(r'^[*-]\s*(.+)', raw_questions_block, re.MULTILINE)
+            if not extracted_new_questions:
+                extracted_new_questions = re.findall(r'^(?:Q\d+|#\d+|\d+\.|[*-])\s*(.+)', raw_questions_block, re.MULTILINE)
+            extracted_new_questions = [q.strip() for q in extracted_new_questions if q.strip()]
+
+        if not extracted_new_questions:
+            extracted_new_questions = [
+                "これまでの仮説について、他に何か深掘りしたい点はありますか？",
+                "この商品・サービスに対する期待値について教えてください。",
+                "理想的な体験とはどのようなものでしょうか？",
+                "現在感じている不満や改善点はありますか？",
+                "将来的にどのような変化を期待しますか？"
+            ]
+        
+        return {
+            "summaries": summaries,
+            "initial_analysis": initial_analysis_result,
+            "hypothesis_and_questions": hypothesis_and_questions_text,
+            "additional_questions": extracted_new_questions
+        }
+    
+    except Exception as e:
+        logger.error(f"仮説生成エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"仮説の生成に失敗しました: {e}")
+
+@app.post("/api/conduct-hypothesis-interview")
+async def conduct_hypothesis_interview(request: InterviewRequest):
+    """仮説検証のための追加インタビューを実行するエンドポイント"""
+    try:
+        if not current_session["selected_personas"]:
+            raise HTTPException(status_code=400, detail="ペルソナが選択されていません")
+        
+        persona = current_session["selected_personas"][request.persona_index]
+        session = current_session["interview_sessions"][persona.name]
+        chat = session["chat"]
+        
+        interview_results = []
+        
+        for i, question in enumerate(request.questions):
+            # メイン質問
+            response = chat.send_message(f"次の質問に回答してください：{question}")
+            main_answer = response.text
+            
+            question_result = {
+                "question": question,
+                "main_answer": main_answer,
+                "follow_ups": []
+            }
+            
+            # 更問を2回実行
+            for follow_up_num in range(1, 3):
+                follow_up_prompt = f"""
+                あなたは戦略的なインタビュアーです。これまでの{persona.name}さんとの会話履歴を読み、
+                提示された仮説を検証するために、直前の回答について、より具体的で洞察的な情報を引き出すような、
+                1つの質問を作成してください。
+                質問は「〇〇について、どのように感じますか？」のような対話形式でお願いします。
+                
+                直前の質問: {question}
+                直前の回答: {main_answer}
+                """
+                
+                follow_up_question = generate_text(follow_up_prompt, temperature=0.7)
+                
+                if follow_up_question and "エラー" not in follow_up_question:
+                    try:
+                        follow_up_response = chat.send_message(follow_up_question)
+                        follow_up_answer = follow_up_response.text
+                        
+                        question_result["follow_ups"].append({
+                            "question": follow_up_question,
+                            "answer": follow_up_answer
+                        })
+                    except Exception as e:
+                        logger.error(f"更問への回答生成エラー: {e}")
+                        break
+            
+            interview_results.append(question_result)
+        
+        # セッション履歴を更新
+        session["history"].extend(interview_results)
+        
+        return {
+            "persona_name": persona.name,
+            "interview_results": interview_results,
+            "message": "仮説検証インタビューが完了しました"
+        }
+    
+    except Exception as e:
+        logger.error(f"仮説検証インタビュー実行エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"仮説検証インタビューの実行に失敗しました: {e}")
+
+@app.post("/api/generate-final-analysis")
+async def generate_final_analysis():
+    """最終的なマーケティング戦略分析を生成するエンドポイント"""
+    try:
+        if not current_session["selected_personas"]:
+            raise HTTPException(status_code=400, detail="インタビューデータがありません")
+        
+        # 全インタビュー結果を要約
+        final_summaries = {}
+        for persona in current_session["selected_personas"]:
+            session = current_session["interview_sessions"][persona.name]
+            history = session["history"]
+            
+            if not history:
+                continue
+            
+            # インタビュー内容を要約
+            interview_content = ""
+            for result in history:
+                interview_content += f"質問: {result['question']}\n"
+                interview_content += f"回答: {result['main_answer']}\n"
+                for follow_up in result.get('follow_ups', []):
+                    interview_content += f"更問: {follow_up['question']}\n"
+                    interview_content += f"更問回答: {follow_up['answer']}\n"
+                interview_content += "\n"
+            
+            summary_prompt = f"""
+            以下のペルソナへの全インタビュー内容（初回+仮説検証）を読み、重要なポイントを統合的に要約してください。
+            
+            ペルソナ情報:
+            {persona.raw_text}
+            
+            全インタビュー内容:
+            {interview_content}
+            """
+            
+            summary = generate_text(summary_prompt, temperature=0.5)
+            final_summaries[persona.name] = summary
+        
+        # 最終分析を生成
+        all_final_summaries = '\n\n'.join([f"--- {name}さんの要約 ---\n{summary}" for name, summary in final_summaries.items()])
+        
+        final_analysis_prompt = f"""
+        あなたは経験豊富なCMO（最高マーケティング責任者）です。
+        以下のすべての情報（ペルソナと全インタビューの結果）を統合し、最終的なマーケティング戦略を策定してください。
+        
+        全インタビュー要約:
+        {all_final_summaries}
+        
+        【レポート形式】
+        1. **最終的なインサイト**: 初回インタビューと仮説検証インタビューから得られた、最も重要な顧客のインサイトを統合して記述します。
+        2. **仮説の検証結果**: 立てたマーケティング仮説が、インタビュー結果によってどのように検証されたか（支持されたか、反証されたか）を具体的に説明します。
+        3. **推奨するマーケティング戦略**: 最終インサイトと仮説の検証結果に基づき、具体的なアクションプランを含むマーケティング戦略を提言します。
+        4. **事業への影響**: この戦略を実行した場合に、事業にもたらされるであろうポジティブな影響について考察します。
+        5. **次のステップ**: 今後実施すべき具体的な施策やさらなる調査項目を提案します。
+        """
+        
+        final_analysis_result = generate_text(final_analysis_prompt)
+        
+        # コスト計算
+        end_time = time.time()
+        elapsed_time = end_time - current_session["start_time"]
+        estimated_cost = (current_session["total_input_chars"] * INPUT_TOKEN_PRICE) + (current_session["total_output_chars"] * OUTPUT_TOKEN_PRICE)
+        
+        return {
+            "final_summaries": final_summaries,
+            "final_analysis": final_analysis_result,
+            "stats": {
+                "elapsed_time": elapsed_time,
+                "input_chars": current_session["total_input_chars"],
+                "output_chars": current_session["total_output_chars"],
+                "estimated_cost": estimated_cost
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"最終分析生成エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"最終分析の生成に失敗しました: {e}")
 
 @app.get("/api/session-status")
 async def get_session_status():

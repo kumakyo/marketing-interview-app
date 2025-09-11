@@ -1,6 +1,8 @@
-# マーケティングインタビューシステム
+# マーケティングインタビューシステム 🎤
 
 AIを活用したマーケティングインタビューとインサイト分析システムです。ペルソナを自動生成し、深掘りインタビューを実行してマーケティングインサイトを発見できます。
+
+**🖥️ デスクトップアプリケーション対応！別ウィンドウで起動する使いやすいGUIアプリです。**
 
 ## 🚀 機能
 
@@ -9,6 +11,7 @@ AIを活用したマーケティングインタビューとインサイト分析
 - **深掘りインタビュー**: メイン質問と更問を組み合わせた詳細インタビュー
 - **インサイト分析**: AIによる総合的なマーケティング分析とレポート生成
 - **美しいUI/UX**: Next.js + Tailwind CSSによるモダンなインターフェース
+- **🖥️ デスクトップアプリ**: Electronによる別ウィンドウでの直感的な操作
 
 ## 🏗️ アーキテクチャ
 
@@ -36,29 +39,60 @@ marketing-interview-app/
 
 ## 🛠️ セットアップ
 
-### 1. リポジトリをクローン
+### 🖥️ デスクトップアプリとして起動（推奨）
+
+#### 1. リポジトリをクローン
 
 ```bash
 git clone <repository-url>
 cd marketing-interview-app
 ```
 
-### 2. 環境変数の設定
-
-プロジェクトルートに `.env` ファイルを作成し、Google API キーを設定してください：
+#### 2. 環境変数の設定
 
 ```bash
-GOOGLE_API_KEY=your_google_api_key_here
+# .envファイルを作成
+cp env.example .env
+
+# .envファイルを編集してGoogle API キーを設定
+nano .env
 ```
 
-### 3. Docker Composeで起動
+#### 3. アプリケーションを起動
+
+**方法1: 新しい確実なランチャー（推奨）**
+```bash
+python3 start-desktop.py
+```
+
+**方法2: オリジナルランチャー**
+```bash
+python3 launch-app-simple.py
+```
+
+**方法3: シェルスクリプト**
+```bash
+chmod +x launch-app.sh
+./launch-app.sh
+```
+
+#### 4. 使用開始
+- 別ウィンドウでアプリケーションが開きます
+- 初回起動時は依存関係が自動的にインストールされます
+- デスクトップアプリとして直感的に操作できます
+
+### 🌐 Webアプリとして起動（Docker）
 
 ```bash
+# 環境変数設定
+cp env.example .env
+# .envファイルでGOOGLE_API_KEYを設定
+
+# Docker Composeで起動
 docker-compose up --build
 ```
 
-### 4. アプリケーションにアクセス
-
+**アクセス先:**
 - フロントエンド: http://localhost:3000
 - バックエンドAPI: http://localhost:8000
 - API ドキュメント: http://localhost:8000/docs
@@ -136,6 +170,7 @@ AIが自動的に多様な価値観とライフスタイルを持つ5人のペ�
 - **TypeScript**: 型安全性
 - **Tailwind CSS**: ユーティリティファーストCSS
 - **Axios**: HTTP クライアント
+- **Electron**: デスクトップアプリケーション化
 
 ### インフラ
 - **Docker**: コンテナ化
@@ -171,3 +206,93 @@ GitHubのIssuesページからバグレポートや機能要求をお送りく�
 ---
 
 **注意**: このアプリケーションはGoogle Generative AI APIを使用するため、APIの利用料金が発生する可能性があります。使用前に料金体系をご確認ください。
+
+
+## 🔧 トラブルシューティング
+
+### 1. システム環境チェック
+
+まず、システム環境をチェックしてください：
+
+```bash
+python3 check-system.py
+```
+
+### 2. Electronエラーの修正
+
+`libatk-1.0.so.0: cannot open shared object file` エラーが発生した場合：
+
+```bash
+# Electron依存ライブラリをインストール
+chmod +x install-electron-deps.sh
+./install-electron-deps.sh
+```
+
+### 3. 依存関係エラーの修正
+
+`ERESOLVE unable to resolve dependency tree` エラーが発生した場合：
+
+```bash
+# 依存関係を修正
+python3 fix-dependencies.py
+
+# または手動で修正
+cd frontend
+rm -rf node_modules package-lock.json
+npm install --legacy-peer-deps
+```
+
+### 4. 動作テスト
+
+アプリケーションの動作をテスト：
+
+```bash
+python3 test-app.py
+```
+
+### 5. 接続問題のデバッグ
+
+「読み込んでいます」から進まない場合：
+
+```bash
+python3 debug-connection.py
+```
+
+### 6. ビルドエラーの修正
+
+「Build Error」や「Failed to compile」が発生した場合：
+
+```bash
+python3 fix-build-errors.py
+```
+
+## 🚀 起動手順
+
+### 初回セットアップ
+```bash
+cd /home/kyosuke/marketing-interview-app
+cp env.example .env
+# .envファイルでGOOGLE_API_KEYを設定
+```
+
+### アプリケーション起動
+
+#### 方法1: Webアプリとして起動（推奨）
+```bash
+python3 start-web.py
+```
+- ブラウザで自動的に開きます
+- Electronの問題を回避できます
+- 最も安定した動作
+
+#### 方法2: デスクトップアプリとして起動
+```bash
+python3 start-desktop.py
+```
+- 別ウィンドウで起動
+- Electronライブラリが必要
+
+#### 方法3: Docker使用
+```bash
+docker-compose up --build
+```
