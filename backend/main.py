@@ -3,7 +3,7 @@
 マーケティングインタビューシステム - FastAPI バックエンド
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -14,6 +14,10 @@ import time
 import os
 from dotenv import load_dotenv
 import logging
+import pandas as pd
+import json
+from datetime import datetime
+import uuid
 
 # 環境変数を読み込み
 load_dotenv()
@@ -62,8 +66,27 @@ INPUT_TOKEN_PRICE = 0.0000007 / 1000
 OUTPUT_TOKEN_PRICE = 0.0000021 / 1000
 
 # --- データモデル ---
-class PersonaGenerationRequest(BaseModel):
+class ProductService(BaseModel):
+    id: str
+    name: str
+    target_audience: str  # ターゲット顧客
+    benefits: str  # ベネフィット
+    benefit_reason: str  # ベネフィットを信じられる理由
+    basic_info: str  # 価格などの基本情報
+
+class Competitor(BaseModel):
+    name: str
+    description: str
+    price: Optional[str] = None
+    features: Optional[str] = None
+
+class ProjectInfo(BaseModel):
+    products_services: List[ProductService]
+    competitors: List[Competitor]
     topic: str
+
+class PersonaGenerationRequest(BaseModel):
+    project_info: ProjectInfo
 
 class PersonaSelectionRequest(BaseModel):
     selected_indices: List[int]
@@ -72,6 +95,9 @@ class InterviewRequest(BaseModel):
     persona_index: int
     questions: List[str]
     is_hypothesis_phase: bool = False
+
+class QuestionUploadRequest(BaseModel):
+    questions: List[str]
 
 class ChatMessage(BaseModel):
     role: str
@@ -87,6 +113,13 @@ class InterviewSession(BaseModel):
     chat_history: List[ChatMessage]
     summary: str
 
+class HistoryRecord(BaseModel):
+    id: str
+    timestamp: datetime
+    project_info: ProjectInfo
+    final_analysis: str
+    personas_used: List[str]
+
 # --- グローバル変数 ---
 current_session = {
     "personas": [],
@@ -94,8 +127,13 @@ current_session = {
     "interview_sessions": {},
     "total_input_chars": 0,
     "total_output_chars": 0,
-    "start_time": time.time()
+    "start_time": time.time(),
+    "project_info": None,
+    "custom_questions": []
 }
+
+# 履歴保存用（実際のプロダクションではデータベースを使用）
+interview_history = []
 
 # --- ヘルパー関数 ---
 def to_text(text):
@@ -247,9 +285,40 @@ async def root():
 async def generate_personas(request: PersonaGenerationRequest):
     """ペルソナを生成するエンドポイント"""
     try:
+        # セッションにプロジェクト情報を保存
+        current_session["project_info"] = request.project_info
+        
+        # 商品・サービス情報を含むプロンプトを作成
+        products_info = ""
+        for product in request.project_info.products_services:
+            products_info += f"""
+            商品・サービス名: {product.name}
+            ターゲット顧客: {product.target_audience}
+            ベネフィット: {product.benefits}
+            ベネフィットの根拠: {product.benefit_reason}
+            基本情報: {product.basic_info}
+            """
+        
+        competitors_info = ""
+        if request.project_info.competitors:
+            competitors_info = "競合商品・サービス情報:\n"
+            for competitor in request.project_info.competitors:
+                competitors_info += f"- {competitor.name}: {competitor.description}"
+                if competitor.price:
+                    competitors_info += f" (価格: {competitor.price})"
+                if competitor.features:
+                    competitors_info += f" (特徴: {competitor.features})"
+                competitors_info += "\n"
+        
         persona_prompt = f"""
         あなたはマーケティングの専門家です。
-        「{request.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ5人のペルソナを作成してください。
+        以下の商品・サービスと「{request.project_info.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ5人のペルソナを作成してください。
+        
+        【対象商品・サービス情報】
+        {products_info}
+        
+        【競合情報】
+        {competitors_info}
         
         各ペルソナについて、以下の詳細を含めてください。厳密にこの形式で出力してください：
 
@@ -305,7 +374,9 @@ async def generate_personas(request: PersonaGenerationRequest):
 
         注意点：
         - 具体的で現実的な名前を使用してください
-        - 「{request.topic}」に関連する多様な価値観を持つペルソナを作成してください
+        - 上記の商品・サービス情報と「{request.project_info.topic}」に関連する多様な価値観を持つペルソナを作成してください
+        - 対象商品・サービスのターゲット顧客層を考慮してペルソナを作成してください
+        - 競合商品を知っている、または使用したことがあるペルソナも含めてください
         - アスタリスク（*）や箇条書き記号は使用しないでください
         - 各項目は簡潔に記述してください
         """
@@ -356,12 +427,42 @@ async def select_personas(request: PersonaSelectionRequest):
         model = genai.GenerativeModel('models/gemini-1.5-flash')
         
         for persona in selected_personas:
+            # 商品・サービス情報と競合情報を含むプロンプト
+            project_info = current_session.get("project_info")
+            products_context = ""
+            if project_info:
+                for product in project_info.products_services:
+                    products_context += f"""
+                    調査対象商品・サービス: {product.name}
+                    ターゲット: {product.target_audience}
+                    ベネフィット: {product.benefits}
+                    根拠: {product.benefit_reason}
+                    基本情報: {product.basic_info}
+                    """
+                
+                if project_info.competitors:
+                    products_context += "\n競合商品・サービス情報:\n"
+                    for competitor in project_info.competitors:
+                        products_context += f"- {competitor.name}: {competitor.description}"
+                        if competitor.price:
+                            products_context += f" (価格: {competitor.price})"
+                        if competitor.features:
+                            products_context += f" (特徴: {competitor.features})"
+                        products_context += "\n"
+            
             initial_prompt = f"""
             あなたは以下のペルソナになりきり、インタビュアーの質問に答えてください。
             あなたの回答は、ペルソナの性格、価値観、ライフスタイルに沿った、具体的で血の通った内容にしてください。
-            ---
+            
+            【あなたのペルソナ情報】
             {persona.raw_text}
-            ---
+            
+            【調査対象の商品・サービス情報】
+            {products_context}
+            
+            上記の商品・サービスや競合商品について質問された場合は、
+            あなたのペルソナの立場から現実的で具体的な回答をしてください。
+            
             それでは、インタビューを始めます。準備ができたら「はい、準備ができました」と答えてください。
             """
             
@@ -390,8 +491,68 @@ async def select_personas(request: PersonaSelectionRequest):
 async def get_default_questions(topic: Optional[str] = None):
     """デフォルトの質問リストを取得するエンドポイント"""
     
-    # トピック特化型の質問プロンプトを作成
-    if topic:
+    # カスタム質問がある場合はそれを返す
+    if current_session.get("custom_questions"):
+        return {"questions": current_session["custom_questions"]}
+    
+    # プロジェクト情報に基づく質問プロンプトを作成
+    project_info = current_session.get("project_info")
+    if project_info and topic:
+        # 商品・サービス情報を含むプロンプト
+        products_info = ""
+        for product in project_info.products_services:
+            products_info += f"""
+            商品・サービス名: {product.name}
+            ターゲット顧客: {product.target_audience}
+            ベネフィット: {product.benefits}
+            ベネフィットの根拠: {product.benefit_reason}
+            基本情報: {product.basic_info}
+            """
+        
+        competitors_info = ""
+        if project_info.competitors:
+            competitors_info = "競合商品・サービス情報:\n"
+            for competitor in project_info.competitors:
+                competitors_info += f"- {competitor.name}: {competitor.description}"
+                if competitor.price:
+                    competitors_info += f" (価格: {competitor.price})"
+                if competitor.features:
+                    competitors_info += f" (特徴: {competitor.features})"
+                competitors_info += "\n"
+        
+        question_prompt = f"""
+        あなたはマーケティングリサーチの専門家です。
+        以下の商品・サービスと「{topic}」に関する深掘りマーケティングインタビューで使用する、効果的な質問リストを20個作成してください。
+        
+        【対象商品・サービス情報】
+        {products_info}
+        
+        【競合情報】
+        {competitors_info}
+        
+        以下の観点を含む質問を作成してください：
+        1. 基本情報・ライフスタイル（3-4問）
+        2. 「{topic}」と対象商品・サービスに対する現在の利用状況・認識（4-5問）
+        3. 競合商品・サービスの利用体験・満足度（3-4問）
+        4. 対象商品・サービスのベネフィットに関するニーズ・課題の深掘り（4-5問）
+        5. 価格感・購入意向・将来への期待（3-4問）
+        
+        質問は以下の条件を満たしてください：
+        - 回答者が対象商品・サービスについて具体的なエピソードを話しやすい設計
+        - オープンエンドな質問形式
+        - 競合商品・サービスとの比較ができる質問を含める
+        - 対象商品・サービスのベネフィットに対する反応を確認できる質問
+        - 価格感や購入意向を確認できる質問
+        - 自然な会話の流れになるような順番
+        - マーケティング戦略立案に有用な洞察が得られる質問
+        
+        出力形式：
+        1. [質問文]
+        2. [質問文]
+        ...
+        20. [質問文]
+        """
+    elif topic:
         question_prompt = f"""
         あなたはマーケティングリサーチの専門家です。
         「{topic}」に関する深掘りマーケティングインタビューで使用する、効果的な質問リストを20個作成してください。
@@ -624,18 +785,46 @@ async def generate_analysis():
         # 総合分析を生成
         all_summaries = '\n\n'.join([f"--- {name}さんの要約 ---\n{summary}" for name, summary in summaries.items()])
         
+        # 商品・サービス情報を分析に含める
+        project_info = current_session.get("project_info")
+        products_context = ""
+        if project_info:
+            products_context = "\n【対象商品・サービス情報】\n"
+            for product in project_info.products_services:
+                products_context += f"""
+                商品・サービス名: {product.name}
+                ターゲット顧客: {product.target_audience}
+                ベネフィット: {product.benefits}
+                ベネフィットの根拠: {product.benefit_reason}
+                基本情報: {product.basic_info}
+                """
+            
+            if project_info.competitors:
+                products_context += "\n【競合商品・サービス情報】\n"
+                for competitor in project_info.competitors:
+                    products_context += f"- {competitor.name}: {competitor.description}"
+                    if competitor.price:
+                        products_context += f" (価格: {competitor.price})"
+                    if competitor.features:
+                        products_context += f" (特徴: {competitor.features})"
+                    products_context += "\n"
+        
         analysis_prompt = f"""
         あなたはトップクラスのマーケティングアナリストです。
-        以下の3名のペルソナのインタビュー要約を深く読み解き、詳細なインサイト分析レポートを作成してください。
+        以下の商品・サービス情報と3名のペルソナのインタビュー要約を深く読み解き、詳細なインサイト分析レポートを作成してください。
+        
+        {products_context}
         
         インタビュー要約:
         {all_summaries}
         
         【レポート形式】
-        1. **顧客インサイトの要約**: 各ペルソナの回答から得られた、顧客の心理や行動に関する重要な洞察をまとめます。
-        2. **共通点と相違点**: 3名のペルソナ間の回答の共通点と、特に注目すべき相違点を分析します。
-        3. **マーケティングの示唆**: この分析結果から、どのようなマーケティング戦略やアプローチが考えられるか、具体的な示唆を記述します。
-        4. **推奨アクション**: 具体的に実行すべきマーケティング施策を提案します。
+        1. **対象商品・サービスに対する顧客インサイト**: 各ペルソナの回答から得られた、対象商品・サービスに関する重要な洞察をまとめます。
+        2. **競合商品との比較分析**: 競合商品・サービスに対する反応と対象商品の差別化ポイントを分析します。
+        3. **ターゲット顧客の検証**: 想定ターゲットと実際のペルソナの反応を比較し、ターゲット設定の妥当性を評価します。
+        4. **ベネフィットの受容性**: 提示したベネフィットに対するペルソナの反応を分析し、訴求力を評価します。
+        5. **価格感・購入意向**: 価格設定に対する反応と購入意向を分析します。
+        6. **マーケティング戦略の示唆**: この分析結果から、具体的なマーケティング戦略を提案します。
         """
         
         analysis_result = generate_text(analysis_prompt)
@@ -882,19 +1071,48 @@ async def generate_final_analysis():
         # 最終分析を生成
         all_final_summaries = '\n\n'.join([f"--- {name}さんの要約 ---\n{summary}" for name, summary in final_summaries.items()])
         
+        # 商品・サービス情報を最終分析に含める
+        project_info = current_session.get("project_info")
+        products_context = ""
+        if project_info:
+            products_context = "\n【対象商品・サービス情報】\n"
+            for product in project_info.products_services:
+                products_context += f"""
+                商品・サービス名: {product.name}
+                ターゲット顧客: {product.target_audience}
+                ベネフィット: {product.benefits}
+                ベネフィットの根拠: {product.benefit_reason}
+                基本情報: {product.basic_info}
+                """
+            
+            if project_info.competitors:
+                products_context += "\n【競合商品・サービス情報】\n"
+                for competitor in project_info.competitors:
+                    products_context += f"- {competitor.name}: {competitor.description}"
+                    if competitor.price:
+                        products_context += f" (価格: {competitor.price})"
+                    if competitor.features:
+                        products_context += f" (特徴: {competitor.features})"
+                    products_context += "\n"
+        
         final_analysis_prompt = f"""
         あなたは経験豊富なCMO（最高マーケティング責任者）です。
-        以下のすべての情報（ペルソナと全インタビューの結果）を統合し、最終的なマーケティング戦略を策定してください。
+        以下のすべての情報（商品・サービス情報、競合情報、ペルソナと全インタビューの結果）を統合し、最終的なマーケティング戦略を策定してください。
+        
+        {products_context}
         
         全インタビュー要約:
         {all_final_summaries}
         
         【レポート形式】
-        1. **最終的なインサイト**: 初回インタビューと仮説検証インタビューから得られた、最も重要な顧客のインサイトを統合して記述します。
-        2. **仮説の検証結果**: 立てたマーケティング仮説が、インタビュー結果によってどのように検証されたか（支持されたか、反証されたか）を具体的に説明します。
-        3. **推奨するマーケティング戦略**: 最終インサイトと仮説の検証結果に基づき、具体的なアクションプランを含むマーケティング戦略を提言します。
-        4. **事業への影響**: この戦略を実行した場合に、事業にもたらされるであろうポジティブな影響について考察します。
-        5. **次のステップ**: 今後実施すべき具体的な施策やさらなる調査項目を提案します。
+        1. **商品・サービスの市場適合性**: 対象商品・サービスが市場やペルソナのニーズにどの程度適合しているかを評価します。
+        2. **競合優位性の分析**: 競合商品・サービスとの比較から見えてくる差別化ポイントや優位性を分析します。
+        3. **ターゲット顧客の精度**: 設定したターゲット顧客とペルソナの反応から、ターゲティングの精度を評価します。
+        4. **ベネフィット訴求の効果**: 提示したベネフィットの受容性と説得力を評価し、改善点を提案します。
+        5. **価格戦略の妥当性**: 価格設定に対するペルソナの反応から、価格戦略の妥当性を評価します。
+        6. **推奨マーケティング戦略**: 上記分析に基づく具体的なマーケティング戦略とアクションプランを提案します。
+        7. **リスクと課題**: 予想される課題やリスクとその対策を提案します。
+        8. **次のステップ**: 今後実施すべき具体的な施策やさらなる調査項目を提案します。
         """
         
         final_analysis_result = generate_text(final_analysis_prompt)
@@ -927,8 +1145,166 @@ async def get_session_status():
         "has_selected_personas": len(current_session["selected_personas"]) > 0,
         "selected_persona_count": len(current_session["selected_personas"]),
         "personas": [{"id": i, "name": p.name} for i, p in enumerate(current_session["personas"])],
-        "selected_personas": [{"name": p.name} for p in current_session["selected_personas"]]
+        "selected_personas": [{"name": p.name} for p in current_session["selected_personas"]],
+        "project_info": current_session.get("project_info")
     }
+
+@app.post("/api/upload-excel-questions")
+async def upload_excel_questions(file: UploadFile = File(...)):
+    """Excelファイルから質問を読み取るエンドポイント"""
+    try:
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(status_code=400, detail="Excelファイル (.xlsx, .xls) のみ対応しています")
+        
+        # ファイルを読み取り
+        contents = await file.read()
+        
+        # pandasでExcelファイルを読み取り
+        df = pd.read_excel(contents)
+        
+        # 最初の列から質問を抽出
+        questions = []
+        for index, row in df.iterrows():
+            question = str(row.iloc[0]).strip()
+            if question and question != 'nan' and len(question) > 5:
+                questions.append(question)
+        
+        if not questions:
+            raise HTTPException(status_code=400, detail="有効な質問が見つかりませんでした")
+        
+        # セッションに保存
+        current_session["custom_questions"] = questions
+        
+        return {
+            "questions": questions,
+            "count": len(questions),
+            "message": f"{len(questions)}個の質問を読み取りました"
+        }
+    
+    except Exception as e:
+        logger.error(f"Excelファイル読み取りエラー: {e}")
+        raise HTTPException(status_code=500, detail=f"Excelファイルの読み取りに失敗しました: {e}")
+
+@app.post("/api/save-interview-history")
+async def save_interview_history():
+    """インタビュー結果を履歴に保存するエンドポイント"""
+    try:
+        if not current_session.get("project_info"):
+            raise HTTPException(status_code=400, detail="プロジェクト情報がありません")
+        
+        # 各ペルソナの全インタビュー結果をまとめて最終分析を生成
+        summaries = {}
+        for persona in current_session.get("selected_personas", []):
+            session = current_session["interview_sessions"].get(persona.name)
+            if not session or not session.get("history"):
+                continue
+            
+            # インタビュー内容を要約
+            interview_content = ""
+            for result in session["history"]:
+                interview_content += f"質問: {result['question']}\n"
+                interview_content += f"回答: {result['main_answer']}\n"
+                for follow_up in result.get('follow_ups', []):
+                    interview_content += f"更問: {follow_up['question']}\n"
+                    interview_content += f"更問回答: {follow_up['answer']}\n"
+                interview_content += "\n"
+            
+            summaries[persona.name] = interview_content
+        
+        # 商品・サービス情報と競合情報を含む最終分析
+        products_info = ""
+        for product in current_session["project_info"].products_services:
+            products_info += f"""
+            商品・サービス名: {product.name}
+            ターゲット顧客: {product.target_audience}
+            ベネフィット: {product.benefits}
+            ベネフィットの根拠: {product.benefit_reason}
+            基本情報: {product.basic_info}
+            """
+        
+        competitors_info = ""
+        if current_session["project_info"].competitors:
+            competitors_info = "\n競合商品・サービス情報:\n"
+            for competitor in current_session["project_info"].competitors:
+                competitors_info += f"- {competitor.name}: {competitor.description}"
+                if competitor.price:
+                    competitors_info += f" (価格: {competitor.price})"
+                if competitor.features:
+                    competitors_info += f" (特徴: {competitor.features})"
+                competitors_info += "\n"
+        
+        final_analysis_summary = f"""
+        プロジェクト概要:
+        トピック: {current_session["project_info"].topic}
+        
+        商品・サービス情報:
+        {products_info}
+        {competitors_info}
+        
+        インタビュー実施ペルソナ: {', '.join(summaries.keys())}
+        """
+        
+        history_record = HistoryRecord(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            project_info=current_session["project_info"],
+            final_analysis=final_analysis_summary,
+            personas_used=[p.name for p in current_session.get("selected_personas", [])]
+        )
+        
+        interview_history.append(history_record)
+        
+        return {
+            "message": "履歴に保存しました",
+            "history_id": history_record.id
+        }
+    
+    except Exception as e:
+        logger.error(f"履歴保存エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"履歴の保存に失敗しました: {e}")
+
+@app.get("/api/interview-history")
+async def get_interview_history():
+    """過去のインタビュー履歴を取得するエンドポイント"""
+    try:
+        history_list = []
+        for record in interview_history:
+            history_list.append({
+                "id": record.id,
+                "timestamp": record.timestamp,
+                "topic": record.project_info.topic,
+                "products_count": len(record.project_info.products_services),
+                "personas_used": record.personas_used
+            })
+        
+        # 新しい順にソート
+        history_list.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return {"history": history_list}
+    
+    except Exception as e:
+        logger.error(f"履歴取得エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"履歴の取得に失敗しました: {e}")
+
+@app.get("/api/interview-history/{history_id}")
+async def get_interview_history_detail(history_id: str):
+    """特定の履歴詳細を取得するエンドポイント"""
+    try:
+        for record in interview_history:
+            if record.id == history_id:
+                return {
+                    "id": record.id,
+                    "timestamp": record.timestamp,
+                    "project_info": record.project_info,
+                    "final_analysis": record.final_analysis,
+                    "personas_used": record.personas_used
+                }
+        
+        raise HTTPException(status_code=404, detail="履歴が見つかりませんでした")
+    
+    except Exception as e:
+        logger.error(f"履歴詳細取得エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"履歴詳細の取得に失敗しました: {e}")
 
 if __name__ == "__main__":
     import uvicorn

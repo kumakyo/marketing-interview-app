@@ -11,6 +11,28 @@ const api = axios.create({
   // timeout機能を削除（インタビュー実行時に無制限の時間を許可）
 });
 
+export interface ProductService {
+  id: string;
+  name: string;
+  target_audience: string;
+  benefits: string;
+  benefit_reason: string;
+  basic_info: string;
+}
+
+export interface Competitor {
+  name: string;
+  description: string;
+  price?: string;
+  features?: string;
+}
+
+export interface ProjectInfo {
+  products_services: ProductService[];
+  competitors: Competitor[];
+  topic: string;
+}
+
 export interface Persona {
   id: number;
   name: string;
@@ -85,8 +107,8 @@ export const apiClient = {
   },
 
   // ペルソナを生成
-  generatePersonas: async (topic: string): Promise<PersonaGenerationResponse> => {
-    const response = await api.post('/api/generate-personas', { topic });
+  generatePersonas: async (projectInfo: ProjectInfo): Promise<PersonaGenerationResponse> => {
+    const response = await api.post('/api/generate-personas', { project_info: projectInfo });
     return response.data;
   },
 
@@ -144,6 +166,36 @@ export const apiClient = {
   // セッション状態を取得
   getSessionStatus: async () => {
     const response = await api.get('/api/session-status');
+    return response.data;
+  },
+
+  // Excelファイルから質問をアップロード
+  uploadExcelQuestions: async (file: File): Promise<{ questions: string[]; count: number; message: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/api/upload-excel-questions', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // インタビュー履歴を保存
+  saveInterviewHistory: async (): Promise<{ message: string; history_id: string }> => {
+    const response = await api.post('/api/save-interview-history');
+    return response.data;
+  },
+
+  // インタビュー履歴一覧を取得
+  getInterviewHistory: async (): Promise<{ history: any[] }> => {
+    const response = await api.get('/api/interview-history');
+    return response.data;
+  },
+
+  // 特定の履歴詳細を取得
+  getInterviewHistoryDetail: async (historyId: string): Promise<any> => {
+    const response = await api.get(`/api/interview-history/${historyId}`);
     return response.data;
   },
 };
