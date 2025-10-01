@@ -172,7 +172,7 @@ def start_frontend():
         
         print("📱 Next.jsサーバーを起動中...")
         next_process = subprocess.Popen([
-            "npm", "run", "dev-local"
+            "npm", "run", "dev-3001"
         ], env=env)
         
         # Next.jsの起動を待つ（バックエンドが既に起動済み）
@@ -180,7 +180,7 @@ def start_frontend():
         time.sleep(8)
         
         # ブラウザでアプリケーションを開く
-        frontend_url = "http://localhost:3000"
+        frontend_url = "http://localhost:3001"
         print("🌐 ブラウザでアプリケーションを開いています...")
         try:
             webbrowser.open(frontend_url)
@@ -226,7 +226,7 @@ def main():
     
     print("\n✅ アプリケーションが正常に起動しました！")
     print("🌐 ブラウザでアプリケーションが開いています")
-    print("📍 URL: http://localhost:3000")
+    print("📍 URL: http://localhost:3001")
     print("🔗 API: http://localhost:8000")
     print("🛑 終了するには Ctrl+C を押してください")
     print("-" * 60)

@@ -138,7 +138,7 @@ def to_text(text):
     text = text.replace('•', ' *')
     return textwrap.dedent(text)
 
-def generate_text(prompt, model_name="models/gemini-2.5-flash", temperature=0.8):
+def generate_text(prompt, model_name="models/gemini-1.5-flash-8b", temperature=0.8):
     """指定されたプロンプトと設定でテキストを生成する関数"""
     try:
         model = genai.GenerativeModel(model_name=model_name)
@@ -391,7 +391,7 @@ async def select_personas(request: PersonaSelectionRequest):
         current_session["selected_personas"] = selected_personas
         
         # 各ペルソナのチャットセッションを初期化
-        model = genai.GenerativeModel('models/gemini-2.5-flash')
+        model = genai.GenerativeModel('models/gemini-1.5-flash-8b')
         
         for persona in selected_personas:
             # 商品・サービス情報と競合情報を含むプロンプト
@@ -815,7 +815,11 @@ async def generate_analysis():
     
     except Exception as e:
         logger.error(f"分析生成エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"分析の生成に失敗しました: {e}")
+        logger.error(f"セッション状態: selected_personas={len(current_session.get('selected_personas', []))}")
+        logger.error(f"プロジェクト情報: {current_session.get('project_info') is not None}")
+        import traceback
+        logger.error(f"詳細エラー: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"分析の生成に失敗しました: {str(e)}")
 
 @app.post("/api/generate-hypothesis")
 async def generate_hypothesis():

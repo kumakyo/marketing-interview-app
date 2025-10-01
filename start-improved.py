@@ -80,8 +80,8 @@ def kill_existing_processes():
     print_status("既存のプロセスをチェック中...", "🔍")
     
     try:
-        # ポート8000と3000を使用しているプロセスを終了
-        for port in [8000, 3000]:
+        # ポート8000と3000、3001を使用しているプロセスを終了
+        for port in [8000, 3000, 3001]:
             try:
                 result = subprocess.run(['lsof', '-ti', f':{port}'], 
                                      capture_output=True, text=True)
@@ -149,9 +149,9 @@ def start_frontend():
     except subprocess.CalledProcessError:
         print_status("⚠️ npm依存関係のインストールに失敗しました")
     
-    # フロントエンドを起動
+    # フロントエンドを起動（ポート3001でネットワークアクセス対応）
     frontend_process = subprocess.Popen(
-        ["npm", "run", "dev"],
+        ["npm", "run", "dev-network-3001"],
         cwd=frontend_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
@@ -161,7 +161,7 @@ def start_frontend():
     print_status("フロントエンドサーバーの起動を確認中...", "⏳")
     for _ in range(60):  # 60秒待機
         try:
-            response = requests.get("http://localhost:3000/", timeout=2)
+            response = requests.get("http://localhost:3001/", timeout=2)
             if response.status_code == 200:
                 print_status("✅ フロントエンドサーバー起動完了", "🎉")
                 return frontend_process
@@ -208,7 +208,7 @@ def main():
     
     # ブラウザを開く
     print_status("ブラウザを開いています...", "🌐")
-    webbrowser.open("http://localhost:3000")
+    webbrowser.open("http://localhost:3001")
     
     # IPアドレス情報を取得
     local_ip = get_local_ip()
@@ -218,10 +218,10 @@ def main():
     print_status("🎉 マーケティングインタビューシステムが起動しました！")
     print()
     print_status("📱 ローカルアクセス:")
-    print_status("   http://localhost:3000", "  🔗")
+    print_status("   http://localhost:3001", "  🔗")
     print()
     print_status("🌐 ネットワークアクセス（他のデバイスから）:")
-    print_status(f"   http://{local_ip}:3000", "  🔗")
+    print_status(f"   http://{local_ip}:3001", "  🔗")
     print()
     print_status("📚 API文書:")
     print_status("   http://localhost:8000/docs", "  📖")
