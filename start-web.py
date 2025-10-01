@@ -172,7 +172,7 @@ def start_frontend():
         
         print("📱 Next.jsサーバーを起動中...")
         next_process = subprocess.Popen([
-            "npm", "run", "dev"
+            "npm", "run", "dev-local"
         ], env=env)
         
         # Next.jsの起動を待つ（バックエンドが既に起動済み）

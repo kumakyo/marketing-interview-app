@@ -58,7 +58,7 @@ def check_environment():
     """環境変数をチェック"""
     print_status("環境設定をチェック中...", "🔧")
     
-    env_file = Path("/.env")
+    env_file = Path(".env")
     if not env_file.exists():
         env_example = Path("env.example")
         if env_example.exists():

@@ -6,6 +6,7 @@
   "homepage": "./",
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
+    "dev-local": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

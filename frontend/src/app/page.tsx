@@ -407,7 +407,7 @@ export default function Home() {
   const renderStep = () => {
     switch (step) {
       case 0:
-        return (
+  return (
           <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">
@@ -417,7 +417,7 @@ export default function Home() {
                 AIを活用してペルソナを生成し、深掘りインタビューでインサイトを発見します
               </p>
             </div>
-
+            
             {/* 履歴表示ボタン */}
             {interviewHistory.length > 0 && (
               <div className="text-center mb-6">
@@ -735,7 +735,7 @@ export default function Home() {
                 </svg>
                 <span>全てクリア</span>
               </button>
-            </div>
+        </div>
             
             <div className="space-y-4">
               {questions.map((question, index) => (
