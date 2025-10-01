@@ -38,17 +38,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS設定
+# CORS設定 - より柔軟なアクセス許可
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:3001", 
-        "http://127.0.0.1:3000", 
-        "http://127.0.0.1:3001"
-    ],  # Next.jsの複数ポートに対応
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],  # 全てのオリジンを許可（セキュリティ要件に応じて調整）
+    allow_credentials=False,  # 全オリジン許可時はcredentialsをFalseに
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -87,6 +82,8 @@ class ProjectInfo(BaseModel):
 
 class PersonaGenerationRequest(BaseModel):
     project_info: ProjectInfo
+    persona_count: int = 5  # デフォルト5人
+    persona_characteristics: Optional[str] = None  # ペルソナの特徴指定
 
 class PersonaSelectionRequest(BaseModel):
     selected_indices: List[int]
@@ -310,19 +307,29 @@ async def generate_personas(request: PersonaGenerationRequest):
                     competitors_info += f" (特徴: {competitor.features})"
                 competitors_info += "\n"
         
+        # ペルソナの特徴指定がある場合の追加情報
+        characteristics_info = ""
+        if request.persona_characteristics:
+            characteristics_info = f"""
+        
+        【ペルソナの特徴指定】
+        以下の特徴を考慮してペルソナを作成してください：
+        {request.persona_characteristics}
+        """
+
         persona_prompt = f"""
         あなたはマーケティングの専門家です。
-        以下の商品・サービスと「{request.project_info.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ5人のペルソナを作成してください。
+        以下の商品・サービスと「{request.project_info.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ{request.persona_count}人のペルソナを作成してください。
         
         【対象商品・サービス情報】
         {products_info}
         
         【競合情報】
-        {competitors_info}
+        {competitors_info}{characteristics_info}
         
         各ペルソナについて、以下の詳細を含めてください。厳密にこの形式で出力してください：
 
-        ペルソナ1: [具体的な名前]
+        """ + "\n\n".join([f"""ペルソナ{i+1}: [具体的な名前]
         年齢: [年齢]
         性別: [性別]
         職業: [職業]
@@ -330,47 +337,7 @@ async def generate_personas(request: PersonaGenerationRequest):
         居住地: [居住地]
         家族構成: [家族構成]
         趣味・余暇: [趣味・余暇の過ごし方]
-        関心事・悩み: [関心事・主な悩み]
-
-        ペルソナ2: [具体的な名前]
-        年齢: [年齢]
-        性別: [性別]
-        職業: [職業]
-        年収帯: [年収帯]
-        居住地: [居住地]
-        家族構成: [家族構成]
-        趣味・余暇: [趣味・余暇の過ごし方]
-        関心事・悩み: [関心事・主な悩み]
-
-        ペルソナ3: [具体的な名前]
-        年齢: [年齢]
-        性別: [性別]
-        職業: [職業]
-        年収帯: [年収帯]
-        居住地: [居住地]
-        家族構成: [家族構成]
-        趣味・余暇: [趣味・余暇の過ごし方]
-        関心事・悩み: [関心事・主な悩み]
-
-        ペルソナ4: [具体的な名前]
-        年齢: [年齢]
-        性別: [性別]
-        職業: [職業]
-        年収帯: [年収帯]
-        居住地: [居住地]
-        家族構成: [家族構成]
-        趣味・余暇: [趣味・余暇の過ごし方]
-        関心事・悩み: [関心事・主な悩み]
-
-        ペルソナ5: [具体的な名前]
-        年齢: [年齢]
-        性別: [性別]
-        職業: [職業]
-        年収帯: [年収帯]
-        居住地: [居住地]
-        家族構成: [家族構成]
-        趣味・余暇: [趣味・余暇の過ごし方]
-        関心事・悩み: [関心事・主な悩み]
+        関心事・悩み: [関心事・主な悩み]""" for i in range(request.persona_count)]) + f"""
 
         注意点：
         - 具体的で現実的な名前を使用してください

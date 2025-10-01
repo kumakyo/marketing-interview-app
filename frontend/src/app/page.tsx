@@ -14,6 +14,8 @@ export default function Home() {
   const [productServices, setProductServices] = useState<ProductService[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [productCount, setProductCount] = useState(1);
+  const [personaCount, setPersonaCount] = useState(5);
+  const [personaCharacteristics, setPersonaCharacteristics] = useState('');
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [selectedPersonas, setSelectedPersonas] = useState<number[]>([]);
   const [questions, setQuestions] = useState<string[]>([]);
@@ -106,7 +108,11 @@ export default function Home() {
         competitors
       };
       
-      const response = await apiClient.generatePersonas(projectInfo);
+      const response = await apiClient.generatePersonas(
+        projectInfo, 
+        personaCount, 
+        personaCharacteristics.trim() || undefined
+      );
       setProgress(100);
       setProgressMessage('ペルソナ生成完了');
       setPersonas(response.personas);
@@ -559,6 +565,46 @@ export default function Home() {
               <p><strong>トピック:</strong> {topic}</p>
               <p><strong>商品・サービス数:</strong> {productServices.length}</p>
               <p><strong>競合数:</strong> {competitors.length}</p>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+              <h3 className="font-semibold text-gray-900 mb-4">ペルソナ生成設定</h3>
+              
+              <div>
+                <label htmlFor="personaCount" className="block text-sm font-medium text-gray-700 mb-2">
+                  生成するペルソナの人数
+                </label>
+                <select
+                  id="personaCount"
+                  value={personaCount}
+                  onChange={(e) => setPersonaCount(Number(e.target.value))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={3}>3人</option>
+                  <option value={4}>4人</option>
+                  <option value={5}>5人</option>
+                  <option value={6}>6人</option>
+                  <option value={7}>7人</option>
+                  <option value={8}>8人</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="personaCharacteristics" className="block text-sm font-medium text-gray-700 mb-2">
+                  ペルソナの特徴指定（任意）
+                </label>
+                <textarea
+                  id="personaCharacteristics"
+                  value={personaCharacteristics}
+                  onChange={(e) => setPersonaCharacteristics(e.target.value)}
+                  placeholder="例：20代〜40代の女性を中心に、健康意識が高い人、子育て中の母親を含める、など"
+                  rows={3}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  特定の年齢層、性別、職業、ライフスタイルなどの特徴があれば記載してください
+                </p>
+              </div>
             </div>
             
             <div className="flex justify-center space-x-4">

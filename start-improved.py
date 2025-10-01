@@ -11,11 +11,24 @@ import time
 import signal
 import requests
 import webbrowser
+import socket
 from pathlib import Path
 
 def print_status(message, emoji="🔧"):
     """ステータスメッセージを出力"""
     print(f"{emoji} {message}")
+
+def get_local_ip():
+    """ローカルIPアドレスを取得"""
+    try:
+        # ダミーのUDP接続を作成してローカルIPを取得
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception:
+        return "127.0.0.1"
 
 def install_dependencies():
     """必要な依存関係をインストール"""
@@ -197,12 +210,25 @@ def main():
     print_status("ブラウザを開いています...", "🌐")
     webbrowser.open("http://localhost:3000")
     
+    # IPアドレス情報を取得
+    local_ip = get_local_ip()
+    
     print()
-    print("=" * 60)
+    print("=" * 70)
     print_status("🎉 マーケティングインタビューシステムが起動しました！")
-    print_status("🌐 アクセス先: http://localhost:3000")
-    print_status("📚 API文書: http://localhost:8000/docs")
-    print("=" * 60)
+    print()
+    print_status("📱 ローカルアクセス:")
+    print_status("   http://localhost:3000", "  🔗")
+    print()
+    print_status("🌐 ネットワークアクセス（他のデバイスから）:")
+    print_status(f"   http://{local_ip}:3000", "  🔗")
+    print()
+    print_status("📚 API文書:")
+    print_status("   http://localhost:8000/docs", "  📖")
+    print_status(f"   http://{local_ip}:8000/docs", "  📖")
+    print()
+    print_status("🔒 セキュリティ設定: 全IPアドレスからのアクセスを許可")
+    print("=" * 70)
     print_status("終了するには Ctrl+C を押してください", "⏹️")
     
     try:
@@ -230,4 +256,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

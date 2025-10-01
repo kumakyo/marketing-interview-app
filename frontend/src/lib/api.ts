@@ -107,8 +107,16 @@ export const apiClient = {
   },
 
   // ペルソナを生成
-  generatePersonas: async (projectInfo: ProjectInfo): Promise<PersonaGenerationResponse> => {
-    const response = await api.post('/api/generate-personas', { project_info: projectInfo });
+  generatePersonas: async (
+    projectInfo: ProjectInfo, 
+    personaCount: number = 5, 
+    personaCharacteristics?: string
+  ): Promise<PersonaGenerationResponse> => {
+    const response = await api.post('/api/generate-personas', { 
+      project_info: projectInfo,
+      persona_count: personaCount,
+      persona_characteristics: personaCharacteristics
+    });
     return response.data;
   },
 
