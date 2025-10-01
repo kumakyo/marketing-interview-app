@@ -138,7 +138,7 @@ def to_text(text):
     text = text.replace('•', ' *')
     return textwrap.dedent(text)
 
-def generate_text(prompt, model_name="models/gemini-1.5-flash-8b", temperature=0.8):
+def generate_text(prompt, model_name="models/gemini-2.0-flash-lite", temperature=0.8):
     """指定されたプロンプトと設定でテキストを生成する関数"""
     try:
         model = genai.GenerativeModel(model_name=model_name)
@@ -391,7 +391,7 @@ async def select_personas(request: PersonaSelectionRequest):
         current_session["selected_personas"] = selected_personas
         
         # 各ペルソナのチャットセッションを初期化
-        model = genai.GenerativeModel('models/gemini-1.5-flash-8b')
+        model = genai.GenerativeModel('models/gemini-2.0-flash-lite')
         
         for persona in selected_personas:
             # 商品・サービス情報と競合情報を含むプロンプト
