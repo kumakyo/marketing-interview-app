@@ -420,6 +420,7 @@ async def select_personas(request: PersonaSelectionRequest):
             initial_prompt = f"""
             あなたは以下のペルソナになりきり、インタビュアーの質問に答えてください。
             あなたの回答は、ペルソナの性格、価値観、ライフスタイルに沿った、具体的で血の通った内容にしてください。
+            回答は簡潔に2-3文程度でまとめ、要点を明確に伝えてください。
             
             【あなたのペルソナ情報】
             {persona.raw_text}
@@ -659,7 +660,7 @@ async def conduct_interview(request: InterviewRequest):
         
         for i, question in enumerate(request.questions):
             # メイン質問
-            response = chat.send_message(f"次の質問に回答してください：{question}")
+            response = chat.send_message(f"次の質問に簡潔に2-3文で回答してください：{question}")
             main_answer = response.text
             
             question_result = {
@@ -855,17 +856,46 @@ async def generate_hypothesis():
             summary = generate_text(summary_prompt, temperature=0.5)
             summaries[persona.name] = summary
         
+        # 商品・サービス情報と競合情報を取得
+        products_context = ""
+        if current_session.get("project_info"):
+            project_info = current_session["project_info"]
+            
+            # 商品・サービス情報
+            for product in project_info.products_services:
+                products_context += f"""
+                商品・サービス名: {product.name}
+                ターゲット顧客: {product.target_audience}
+                ベネフィット: {product.benefits}
+                ベネフィットの根拠: {product.benefit_reason}
+                基本情報: {product.basic_info}
+                """
+            
+            # 競合情報
+            if project_info.competitors:
+                products_context += "\n競合商品・サービス情報:\n"
+                for competitor in project_info.competitors:
+                    products_context += f"- {competitor.name}: {competitor.description}"
+                    if competitor.price:
+                        products_context += f" (価格: {competitor.price})"
+                    if competitor.features:
+                        products_context += f" (特徴: {competitor.features})"
+                    products_context += "\n"
+
         # 初回分析を生成
         all_summaries = '\n\n'.join([f"--- {name}さんの要約 ---\n{summary}" for name, summary in summaries.items()])
         
         analysis_prompt = f"""
         あなたはトップクラスのマーケティングアナリストです。
-        以下の3名のペルソナのインタビュー要約を深く読み解き、詳細なインサイト分析レポートを作成してください。
+        以下の商品・サービス情報と3名のペルソナのインタビュー要約を深く読み解き、詳細なインサイト分析レポートを作成してください。
+        
+        【対象商品・サービス情報】
+        {products_context}
         
         インタビュー要約:
         {all_summaries}
         
-        【レポート形式】
+        【レポート形式】（各項目は簡潔に3-4行でまとめてください）
         1. **顧客インサイトの要約**: 各ペルソナの回答から得られた、顧客の心理や行動に関する重要な洞察をまとめます。
         2. **共通点と相違点**: 3名のペルソナ間の回答の共通点と、特に注目すべき相違点を分析します。
         3. **マーケティングの示唆**: この分析結果から、どのようなマーケティング戦略やアプローチが考えられるか、具体的な示唆を記述します。
@@ -945,7 +975,7 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
         
         for i, question in enumerate(request.questions):
             # メイン質問
-            response = chat.send_message(f"次の質問に回答してください：{question}")
+            response = chat.send_message(f"次の質問に簡潔に2-3文で回答してください：{question}")
             main_answer = response.text
             
             question_result = {
@@ -1071,7 +1101,7 @@ async def generate_final_analysis():
         全インタビュー要約:
         {all_final_summaries}
         
-        【レポート形式】
+        【レポート形式】（各項目は簡潔に2-3行でまとめてください）
         1. **商品・サービスの市場適合性**: 対象商品・サービスが市場やペルソナのニーズにどの程度適合しているかを評価します。
         2. **競合優位性の分析**: 競合商品・サービスとの比較から見えてくる差別化ポイントや優位性を分析します。
         3. **ターゲット顧客の精度**: 設定したターゲット顧客とペルソナの反応から、ターゲティングの精度を評価します。
