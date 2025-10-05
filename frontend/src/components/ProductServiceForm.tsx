@@ -42,7 +42,7 @@ export default function ProductServiceForm({
             type="text"
             value={product.name}
             onChange={(e) => onUpdate(product.id, 'name', e.target.value)}
-            placeholder="例: プレミアムカラオケアプリ"
+            placeholder="例: 個人向けオンライン英会話サービス"
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </label>
@@ -81,7 +81,7 @@ export default function ProductServiceForm({
         <textarea
           value={product.benefits}
           onChange={(e) => onUpdate(product.id, 'benefits', e.target.value)}
-          placeholder="例: 高音質でのカラオケ体験、友人とのオンライン共有機能、歌唱力向上のためのAIコーチング、いつでもどこでも好きな時に歌える自由。"
+          placeholder="例: ネイティブ講師との1対1レッスン、24時間予約可能、個別カリキュラム作成、発音矯正AI機能、実践的な会話練習、短期間での英語力向上。"
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows={3}
         />

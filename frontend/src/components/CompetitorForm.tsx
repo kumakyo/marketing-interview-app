@@ -58,7 +58,7 @@ export default function CompetitorForm({
         <textarea
           value={competitor.description}
           onChange={(e) => onUpdate(index, 'description', e.target.value)}
-          placeholder="例: 大手カラオケチェーンが提供するアプリサービス"
+          placeholder="例: 大手英会話スクールが提供するオンライン英会話サービス"
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows={2}
         />

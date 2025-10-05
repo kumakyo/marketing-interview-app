@@ -15,10 +15,10 @@ const InterviewResults: React.FC<InterviewResultsProps> = ({ results, personas }
     </div>
   );
 
-  // ペルソナのアバター取得
+  // ペルソナのアバター取得（日本人ベース）
   const getAvatarUrl = (name: string) => {
     const seed = encodeURIComponent(name);
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9&skinColor=fdbcb4,edb98a,f8d25c&hairColor=2c1b18,724133,a55728,4a312c&eyesColor=6b4423,3e2723&clothingColor=262e33,65c9ff,5199e4,25557c&facialHairProbability=20&accessoriesProbability=30`;
   };
 
   return (

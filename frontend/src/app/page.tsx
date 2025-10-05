@@ -1209,24 +1209,6 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="flex justify-center mt-2">
-            <span className="text-xs text-gray-600">
-              ステップ {step + 1} / 9
-            </span>
-          </div>
-          <div className="flex justify-center mt-1">
-            <span className="text-xs text-gray-500">
-              {step === 0 && 'プロジェクト情報入力'}
-              {step === 1 && 'ペルソナ生成'}
-              {step === 2 && 'ペルソナ選択'}
-              {step === 3 && '質問内容編集'}
-              {step === 4 && '初回インタビュー実行'}
-              {step === 5 && '初回インサイト分析'}
-              {step === 6 && '仮説生成・追加質問'}
-              {step === 7 && '仮説検証インタビュー'}
-              {step === 8 && '最終マーケティング戦略分析'}
-            </span>
-          </div>
         </div>
 
         {/* 進行状況表示（ロード中のとき） */}
