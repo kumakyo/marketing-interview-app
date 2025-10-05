@@ -66,7 +66,7 @@ export default function Home() {
                       : 'bg-gray-200 text-gray-500'
                   }`}
                 >
-                  {index < step ? '✓' : index === step ? '●' : '○'}
+                  {index + 1}
                 </div>
                 <span className={`text-xs mt-1 text-center max-w-[80px] ${
                   index === step ? 'text-blue-600 font-medium' : 'text-gray-500'
@@ -973,23 +973,13 @@ export default function Home() {
 
       case 6:
         return (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="max-w-6xl mx-auto space-y-6">
             {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">マーケティング仮説と追加質問</h2>
-              <p className="text-gray-600">
-                初回分析から導出された仮説と検証のための追加質問
-              </p>
-            </div>
             
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <div className="prose max-w-none">
-                <div
-                  className="text-gray-800 leading-relaxed whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: hypothesisData?.hypothesis_and_questions?.replace(/\n/g, '<br/>') || '' }}
-                />
-              </div>
-            </div>
+            <InsightAnalysis 
+              analysis={hypothesisData?.hypothesis_and_questions || ''} 
+              title="💭 マーケティング仮説と検証質問"
+            />
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-blue-900 mb-4">追加質問内容</h3>
@@ -1185,31 +1175,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        {/* プログレスバー */}
-        <div className="mb-8">
-          <div className="flex items-center justify-center space-x-2">
-            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((stepNumber) => (
-              <div key={stepNumber} className="flex items-center">
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                    step >= stepNumber
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-300 text-gray-600'
-                  }`}
-                >
-                  {stepNumber + 1}
-                </div>
-                {stepNumber < 8 && (
-                  <div
-                    className={`w-8 h-1 ${
-                      step > stepNumber ? 'bg-blue-600' : 'bg-gray-300'
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* 進行状況表示（ロード中のとき） */}
         {loading && progress > 0 && (

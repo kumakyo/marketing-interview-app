@@ -9,8 +9,6 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
   analysis, 
   title = "インサイト分析結果" 
 }) => {
-  const [activeSection, setActiveSection] = useState<string | null>(null);
-
   // Markdownの見出しを解析してセクション分けする
   const parseAnalysis = (text: string) => {
     // 「*」を削除
@@ -23,7 +21,7 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
     lines.forEach((line) => {
       // ## で始まる見出しを検出
       if (line.startsWith('## ')) {
-        if (currentSection) {
+        if (currentSection && currentSection.content.trim()) {
           sections.push(currentSection);
         }
         const title = line.replace('## ', '').trim();
@@ -41,11 +39,11 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
       }
     });
 
-    if (currentSection) {
+    if (currentSection && currentSection.content.trim()) {
       sections.push(currentSection);
     }
 
-    return sections;
+    return sections.filter(section => section.content.trim().length > 0);
   };
 
   const sections = parseAnalysis(analysis);
@@ -92,43 +90,22 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-4">
           {sections.map((section, index) => (
             <div
               key={section.id}
-              className={`border-2 rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
-                getSectionColor(index)
-              } ${
-                activeSection === section.id ? 'ring-2 ring-blue-400' : ''
-              }`}
-              onClick={() => setActiveSection(activeSection === section.id ? null : section.id)}
+              className={`border-2 rounded-xl p-6 ${getSectionColor(index)}`}
             >
-              <div className="flex items-center space-x-3 mb-3">
+              <div className="flex items-center space-x-3 mb-4">
                 <span className="text-2xl">{getSectionIcon(section.title)}</span>
-                <h3 className="font-semibold text-gray-900 text-sm">
+                <h3 className="font-semibold text-gray-900 text-lg">
                   {section.title}
                 </h3>
-                <svg
-                  className={`w-4 h-4 text-gray-400 transition-transform ${
-                    activeSection === section.id ? 'rotate-180' : ''
-                  }`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
               </div>
               
-              {activeSection === section.id ? (
-                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                  {section.content.trim()}
-                </div>
-              ) : (
-                <div className="text-xs text-gray-500">
-                  クリックして詳細を表示
-                </div>
-              )}
+              <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {section.content.trim()}
+              </div>
             </div>
           ))}
         </div>
