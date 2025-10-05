@@ -357,14 +357,26 @@ export default function Home() {
     try {
       const results: Record<string, InterviewResult[]> = {};
       const totalPersonas = selectedPersonas.length;
-      const additionalQuestions = hypothesisData?.additional_questions || [];
+      
+      // 概要から質問を抽出（仮説検証質問の部分のみ）
+      const hypothesisText = hypothesisData?.hypothesis_and_questions || '';
+      const questionLines = hypothesisText.split('\n').filter(line => 
+        line.trim().startsWith('Q') || 
+        line.trim().match(/^\d+\./) ||
+        line.trim().includes('？') || line.trim().includes('?')
+      );
+      
+      // 質問を整理（番号や記号を除去）
+      const extractedQuestions = questionLines.map(line => 
+        line.replace(/^[Q\d\.\s\-\*]+/, '').trim()
+      ).filter(q => q.length > 5); // 短すぎる質問を除外
       
       for (let i = 0; i < selectedPersonas.length; i++) {
         const baseProgress = Math.round((i / totalPersonas) * 100);
         setProgress(baseProgress);
         setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} の仮説検証インタビューを実行中...`);
         
-        const response = await apiClient.conductHypothesisInterview(i, additionalQuestions);
+        const response = await apiClient.conductHypothesisInterview(i, extractedQuestions);
         results[response.persona_name] = response.interview_results;
         
         const completedProgress = Math.round(((i + 1) / totalPersonas) * 100);
@@ -984,18 +996,6 @@ export default function Home() {
               analysis={hypothesisData?.hypothesis_and_questions || ''} 
               title="💭 マーケティング仮説と検証質問"
             />
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-blue-900 mb-4">追加質問内容</h3>
-              <div className="space-y-2">
-                {hypothesisData?.additional_questions?.map((question: string, index: number) => (
-                  <div key={index} className="bg-white p-3 rounded border-l-4 border-blue-500">
-                    <span className="text-sm font-medium text-blue-700">質問 {index + 1}:</span>
-                    <p className="text-gray-800 mt-1">{question}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
             
             <div className="flex justify-center">
               <button
@@ -1046,30 +1046,6 @@ export default function Home() {
               analysis={finalAnalysis} 
               title="🎯 最終マーケティング戦略分析"
             />
-            
-            {finalStats && (
-              <div className="bg-white rounded-lg p-6 border">
-                <h3 className="text-lg font-semibold mb-4">📊 実行統計</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-600">実行時間</p>
-                    <p className="font-medium">{Math.round(finalStats.elapsed_time)}秒</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">入力文字数</p>
-                    <p className="font-medium">{finalStats.input_chars?.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">出力文字数</p>
-                    <p className="font-medium">{finalStats.output_chars?.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">推定コスト</p>
-                    <p className="font-medium">${finalStats.estimated_cost?.toFixed(4)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
             
             <div className="flex justify-center space-x-4">
               <button
