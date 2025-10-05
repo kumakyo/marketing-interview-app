@@ -28,6 +28,7 @@ export default function Home() {
   const [hypothesisData, setHypothesisData] = useState<any>(null);
   const [hypothesisInterviewResults, setHypothesisInterviewResults] = useState<Record<string, InterviewResult[]>>({});
   const [finalAnalysis, setFinalAnalysis] = useState<string>('');
+  const [finalStats, setFinalStats] = useState<any>(null);
   const [loading, setLoading] = useState(true); // 初期状態でローディング
   const [error, setError] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<string>('connecting');
@@ -396,6 +397,7 @@ export default function Home() {
       setProgress(100);
       setProgressMessage('最終分析完了');
       setFinalAnalysis(response.final_analysis);
+      setFinalStats(response.stats);
       setStep(8);
     } catch (err: any) {
       setError('最終分析の生成に失敗しました: ' + (err.response?.data?.detail || err.message));
@@ -541,10 +543,12 @@ export default function Home() {
                                       <p><strong>商品数:</strong> ${history.products_count}</p>
                                       <p><strong>インタビュー対象:</strong> ${history.personas_used.join(', ')}</p>
                                       
-                                      <div class="section analysis">
-                                        <h2>🔍 初回インサイト分析</h2>
-                                        <pre>${detail.analysis || '分析データがありません'}</pre>
-                                      </div>
+                                      ${detail.analysis ? `
+                                        <div class="section analysis">
+                                          <h2>🔍 初回インサイト分析</h2>
+                                          <pre>${detail.analysis}</pre>
+                                        </div>
+                                      ` : ''}
                                       
                                       ${detail.final_analysis ? `
                                         <div class="section final-analysis">
@@ -1042,6 +1046,30 @@ export default function Home() {
               analysis={finalAnalysis} 
               title="🎯 最終マーケティング戦略分析"
             />
+            
+            {finalStats && (
+              <div className="bg-white rounded-lg p-6 border">
+                <h3 className="text-lg font-semibold mb-4">📊 実行統計</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">実行時間</p>
+                    <p className="font-medium">{Math.round(finalStats.elapsed_time)}秒</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">入力文字数</p>
+                    <p className="font-medium">{finalStats.input_chars?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">出力文字数</p>
+                    <p className="font-medium">{finalStats.output_chars?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">推定コスト</p>
+                    <p className="font-medium">${finalStats.estimated_cost?.toFixed(4)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="flex justify-center space-x-4">
               <button
