@@ -80,6 +80,36 @@ def kill_existing_processes():
     print_status("既存のプロセスをチェック中...", "🔍")
     
     try:
+        # まず特定のプロセス名で検索して終了（自分自身は除外）
+        current_pid = os.getpid()
+        process_patterns = [
+            "uvicorn.*main:app", 
+            "npm.*dev-network-3001",
+            "next.*dev",
+            "next-server"
+        ]
+        
+        for pattern in process_patterns:
+            try:
+                # プロセス一覧を取得して自分自身を除外
+                result = subprocess.run(['pgrep', '-f', pattern], 
+                                     capture_output=True, text=True)
+                if result.stdout.strip():
+                    pids = result.stdout.strip().split('\n')
+                    for pid in pids:
+                        try:
+                            pid_int = int(pid)
+                            if pid_int != current_pid:  # 自分自身は除外
+                                os.kill(pid_int, signal.SIGTERM)
+                                print_status(f"プロセス {pid} ({pattern}) を終了しました")
+                        except (ValueError, ProcessLookupError):
+                            pass
+            except subprocess.SubprocessError:
+                pass
+        
+        # 少し待機
+        time.sleep(2)
+        
         # ポート8000と3000、3001を使用しているプロセスを終了
         for port in [8000, 3000, 3001]:
             try:
@@ -89,12 +119,43 @@ def kill_existing_processes():
                     pids = result.stdout.strip().split('\n')
                     for pid in pids:
                         try:
+                            # まずSIGTERMで終了を試行
                             os.kill(int(pid), signal.SIGTERM)
                             print_status(f"プロセス {pid} (ポート{port}) を終了しました")
+                            time.sleep(1)
+                            
+                            # まだ生きているかチェック
+                            try:
+                                os.kill(int(pid), 0)  # プロセス存在チェック
+                                # まだ生きている場合は強制終了
+                                os.kill(int(pid), signal.SIGKILL)
+                                print_status(f"プロセス {pid} を強制終了しました")
+                            except ProcessLookupError:
+                                # 既に終了済み
+                                pass
+                                
                         except ProcessLookupError:
                             pass
             except FileNotFoundError:
                 pass
+        
+        # Next.jsキャッシュをクリア
+        try:
+            frontend_dir = Path("frontend")
+            if frontend_dir.exists():
+                next_cache = frontend_dir / ".next"
+                node_cache = frontend_dir / "node_modules" / ".cache"
+                
+                if next_cache.exists():
+                    subprocess.run(['rm', '-rf', str(next_cache)], 
+                                 capture_output=True)
+                    print_status("Next.jsキャッシュをクリアしました")
+                    
+                if node_cache.exists():
+                    subprocess.run(['rm', '-rf', str(node_cache)], 
+                                 capture_output=True)
+        except Exception:
+            pass
         
         time.sleep(2)
     except Exception as e:
@@ -159,18 +220,50 @@ def start_frontend():
     
     # フロントエンドの起動を確認
     print_status("フロントエンドサーバーの起動を確認中...", "⏳")
-    for _ in range(60):  # 60秒待機
+    for i in range(60):  # 60秒待機
         try:
+            # プロセスが生きているかチェック
+            if frontend_process.poll() is not None:
+                # プロセスが終了している場合、エラー出力を表示
+                stdout, stderr = frontend_process.communicate()
+                print_status(f"❌ フロントエンドプロセスが終了しました", "💥")
+                if stderr:
+                    print_status(f"エラー: {stderr.decode()[:200]}", "⚠️")
+                return None
+            
             response = requests.get("http://localhost:3001/", timeout=2)
             if response.status_code == 200:
                 print_status("✅ フロントエンドサーバー起動完了", "🎉")
                 return frontend_process
         except requests.exceptions.RequestException:
             pass
+        
+        # 10秒ごとにポート状況をチェック
+        if i % 10 == 0 and i > 0:
+            try:
+                result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True)
+                if ':3001' in result.stdout:
+                    print_status("ポート3001は使用中です", "🔍")
+                else:
+                    print_status("ポート3001は空いています", "🔍")
+            except:
+                pass
+        
         time.sleep(1)
         print(".", end="", flush=True)
     
     print_status("❌ フロントエンドサーバーが起動しませんでした", "💥")
+    
+    # プロセスが生きている場合、エラー出力を確認
+    if frontend_process.poll() is None:
+        frontend_process.terminate()
+        try:
+            stdout, stderr = frontend_process.communicate(timeout=5)
+            if stderr:
+                print_status(f"エラー出力: {stderr.decode()[:300]}", "⚠️")
+        except:
+            pass
+    
     return None
 
 def main():
@@ -179,8 +272,14 @@ def main():
     print("=" * 60)
     
     # プロジェクトルートに移動
-    script_dir = Path(__file__).parent
-    os.chdir(script_dir)
+    current_dir = Path.cwd()
+    if current_dir.name != "marketing-interview-app":
+        # marketing-interview-appディレクトリを探す
+        if (current_dir / "marketing-interview-app").exists():
+            os.chdir(current_dir / "marketing-interview-app")
+        elif current_dir.parent.name == "marketing-interview-app":
+            os.chdir(current_dir.parent)
+        # 既にmarketing-interview-appディレクトリ内にいる場合はそのまま
     
     # 環境チェック
     if not check_environment():

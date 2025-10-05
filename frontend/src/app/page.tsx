@@ -7,6 +7,9 @@ import InterviewCard from '@/components/InterviewCard';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ProductServiceForm from '@/components/ProductServiceForm';
 import CompetitorForm from '@/components/CompetitorForm';
+import ChatPersonaCard from '@/components/ChatPersonaCard';
+import ChatInterview from '@/components/ChatInterview';
+import InsightAnalysis from '@/components/InsightAnalysis';
 
 export default function Home() {
   const [step, setStep] = useState(0); // 0: プロジェクト情報入力から開始
@@ -31,6 +34,56 @@ export default function Home() {
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [interviewHistory, setInterviewHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  // ステップ定義
+  const steps = [
+    { id: 0, title: "プロジェクト情報", description: "商品・サービス情報と競合情報を入力" },
+    { id: 1, title: "ペルソナ設定", description: "ペルソナの人数と特徴を設定" },
+    { id: 2, title: "ペルソナ生成", description: "AIがペルソナを自動生成" },
+    { id: 3, title: "ペルソナ選択", description: "インタビューするペルソナを選択" },
+    { id: 4, title: "インタビュー実行", description: "選択したペルソナとインタビュー" },
+    { id: 5, title: "初回分析", description: "インタビュー結果の初回インサイト分析" },
+    { id: 6, title: "仮説生成", description: "追加仮説と質問を生成" },
+    { id: 7, title: "追加インタビュー", description: "仮説検証のための追加インタビュー" },
+    { id: 8, title: "最終分析", description: "全インタビューの最終インサイト分析" }
+  ];
+
+  // ステップ進行状況表示コンポーネント
+  const StepProgress = () => (
+    <div className="mb-8 p-4 bg-white rounded-lg shadow-sm border">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-900">進行状況</h3>
+        <span className="text-sm text-gray-500">
+          ステップ {step + 1} / {steps.length}
+        </span>
+      </div>
+      
+      <div className="flex flex-wrap gap-2 mb-4">
+        {steps.map((stepInfo, index) => (
+          <div
+            key={stepInfo.id}
+            className={`flex-1 min-w-[120px] p-2 rounded-lg text-center text-sm ${
+              index < step
+                ? 'bg-green-100 text-green-800 border border-green-200'
+                : index === step
+                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                : 'bg-gray-100 text-gray-500 border border-gray-200'
+            }`}
+          >
+            <div className="font-medium">{stepInfo.title}</div>
+            <div className="text-xs mt-1">{stepInfo.description}</div>
+          </div>
+        ))}
+      </div>
+      
+      <div className="w-full bg-gray-200 rounded-full h-2">
+        <div
+          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+          style={{ width: `${((step + 1) / steps.length) * 100}%` }}
+        ></div>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     // API接続テストと履歴の読み込み
@@ -405,13 +458,17 @@ export default function Home() {
   };
 
   const renderStep = () => {
+    // ステップ進行状況を表示（ローディング中やエラー時は非表示）
+    const showProgress = !loading && !error && connectionStatus === 'connected';
+    
     switch (step) {
       case 0:
   return (
           <div className="max-w-4xl mx-auto space-y-8">
+            {showProgress && <StepProgress />}
             <div className="text-center">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                マーケティングインタビューシステム
+                tames interview
               </h1>
               <p className="text-lg text-gray-600 mb-8">
                 AIを活用してペルソナを生成し、深掘りインタビューでインサイトを発見します
@@ -450,14 +507,60 @@ export default function Home() {
                           onClick={async () => {
                             try {
                               const detail = await apiClient.getInterviewHistoryDetail(history.id);
-                              alert('履歴詳細: ' + JSON.stringify(detail, null, 2));
+                              
+                              // 新しいウィンドウで詳細を表示
+                              const newWindow = window.open('', '_blank', 'width=1200,height=800,scrollbars=yes');
+                              if (newWindow) {
+                                newWindow.document.write(`
+                                  <html>
+                                    <head>
+                                      <title>tames interview - ${history.topic} - 分析結果</title>
+                                      <meta charset="UTF-8">
+                                      <style>
+                                        body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 1000px; margin: 0 auto; padding: 20px; }
+                                        h1, h2, h3 { color: #333; }
+                                        .section { margin: 30px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+                                        .analysis { background-color: #f8f9fa; }
+                                        .final-analysis { background-color: #e8f5e8; }
+                                        pre { white-space: pre-wrap; word-wrap: break-word; }
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <h1>📊 ${history.topic} - 分析結果</h1>
+                                      <p><strong>実行日時:</strong> ${new Date(history.timestamp).toLocaleString('ja-JP')}</p>
+                                      <p><strong>商品数:</strong> ${history.products_count}</p>
+                                      <p><strong>インタビュー対象:</strong> ${history.personas_used.join(', ')}</p>
+                                      
+                                      <div class="section analysis">
+                                        <h2>🔍 初回インサイト分析</h2>
+                                        <pre>${detail.analysis || '分析データがありません'}</pre>
+                                      </div>
+                                      
+                                      ${detail.final_analysis ? `
+                                        <div class="section final-analysis">
+                                          <h2>🎯 最終マーケティング戦略分析</h2>
+                                          <pre>${detail.final_analysis}</pre>
+                                        </div>
+                                      ` : ''}
+                                      
+                                      ${detail.hypothesis_and_questions ? `
+                                        <div class="section">
+                                          <h2>💭 仮説と追加質問</h2>
+                                          <pre>${detail.hypothesis_and_questions}</pre>
+                                        </div>
+                                      ` : ''}
+                                    </body>
+                                  </html>
+                                `);
+                                newWindow.document.close();
+                              }
                             } catch (err) {
                               setError('履歴の読み込みに失敗しました');
                             }
                           }}
-                          className="text-blue-600 hover:text-blue-800 text-sm"
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
-                          詳細を見る
+                          📄 詳細を見る
                         </button>
                       </div>
                     </div>
@@ -553,6 +656,7 @@ export default function Home() {
       case 1:
         return (
           <div className="max-w-2xl mx-auto space-y-6">
+            {showProgress && <StepProgress />}
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">ペルソナ生成</h2>
               <p className="text-lg text-gray-600 mb-8">
@@ -628,20 +732,24 @@ export default function Home() {
       case 2:
         return (
           <div className="space-y-6">
+            {showProgress && <StepProgress />}
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">ペルソナを選択</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">💬 インタビュー相手を選択</h2>
               <p className="text-gray-600">
                 インタビューしたい3名のペルソナを選択してください ({selectedPersonas.length}/3)
               </p>
+              <p className="text-sm text-gray-500 mt-2">
+                チャット形式でインタビューを行います
+              </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {personas.map((persona) => (
-                <PersonaCard
+                <ChatPersonaCard
                   key={persona.id}
                   persona={persona}
                   isSelected={selectedPersonas.includes(persona.id)}
-                  onSelect={handlePersonaSelection}
+                  onSelect={() => handlePersonaSelection(persona.id)}
                 />
               ))}
             </div>
@@ -667,6 +775,7 @@ export default function Home() {
       case 3:
         return (
           <div className="max-w-4xl mx-auto space-y-6">
+            {showProgress && <StepProgress />}
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">インタビュー質問</h2>
               <p className="text-gray-600">
@@ -805,6 +914,7 @@ export default function Home() {
       case 4:
         return (
           <div className="space-y-8">
+            {showProgress && <StepProgress />}
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">インタビュー結果</h2>
               <p className="text-gray-600">
@@ -839,22 +949,13 @@ export default function Home() {
 
       case 5:
         return (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">初回インサイト分析結果</h2>
-              <p className="text-gray-600">
-                初回インタビューのインサイト分析
-              </p>
-            </div>
+          <div className="max-w-6xl mx-auto space-y-6">
+            {showProgress && <StepProgress />}
             
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <div className="prose max-w-none">
-                <div
-                  className="text-gray-800 leading-relaxed whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br/>') }}
-                />
-              </div>
-            </div>
+            <InsightAnalysis 
+              analysis={analysis} 
+              title="🔍 初回インサイト分析結果"
+            />
             
             <div className="flex justify-center">
               <button
@@ -871,6 +972,7 @@ export default function Home() {
       case 6:
         return (
           <div className="max-w-4xl mx-auto space-y-6">
+            {showProgress && <StepProgress />}
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">マーケティング仮説と追加質問</h2>
               <p className="text-gray-600">
@@ -914,6 +1016,7 @@ export default function Home() {
       case 7:
         return (
           <div className="space-y-8">
+            {showProgress && <StepProgress />}
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">仮説検証インタビュー結果</h2>
               <p className="text-gray-600">
@@ -948,22 +1051,13 @@ export default function Home() {
 
       case 8:
         return (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">最終マーケティング戦略分析</h2>
-              <p className="text-gray-600">
-                全インタビューを統合した最終的なマーケティング戦略提言
-              </p>
-            </div>
+          <div className="max-w-6xl mx-auto space-y-6">
+            {showProgress && <StepProgress />}
             
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <div className="prose max-w-none">
-                <div
-                  className="text-gray-800 leading-relaxed whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: finalAnalysis.replace(/\n/g, '<br/>') }}
-                />
-              </div>
-            </div>
+            <InsightAnalysis 
+              analysis={finalAnalysis} 
+              title="🎯 最終マーケティング戦略分析"
+            />
             
             <div className="flex justify-center space-x-4">
               <button
@@ -1039,7 +1133,7 @@ export default function Home() {
                   }
                   
                   const file = new Blob([
-                    `マーケティングインタビューシステム - 最終レポート\n\n`,
+                    `tames interview - 最終レポート\n\n`,
                     `トピック: ${topic}\n\n`,
                     `=== 商品・サービス情報 ===\n${productsInfo}\n`,
                     competitorsInfo,

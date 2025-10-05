@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "マーケティングインタビューシステム",
+  title: "tames interview",
   description: "AIを活用したマーケティングインタビューとインサイト分析システム",
 };
 
