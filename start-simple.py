@@ -103,23 +103,58 @@ def start_frontend():
     
     # 起動確認
     print_status("フロントエンドの起動を確認中...", "⏳")
-    for _ in range(60):
+    startup_success = False
+    
+    for i in range(90):  # 90秒まで待機
         try:
+            # プロセスが終了していないかチェック
             if frontend_process.poll() is not None:
+                stdout, stderr = frontend_process.communicate()
                 print_status("❌ フロントエンドプロセスが終了しました", "💥")
+                if stderr:
+                    print_status(f"エラー: {stderr.decode()[:200]}", "⚠️")
                 return None
             
-            response = requests.get("http://localhost:3001/", timeout=2)
-            if response.status_code == 200:
-                print_status("✅ フロントエンドサーバー起動完了", "🎉")
-                return frontend_process
-        except requests.exceptions.RequestException:
+            # ポートがリスニング中かチェック
+            result = subprocess.run(['ss', '-tln'], capture_output=True, text=True)
+            if ':3001' in result.stdout:
+                # ポートがリスニング中の場合、HTTPリクエストを試行
+                try:
+                    response = requests.get("http://localhost:3001/", timeout=3)
+                    if response.status_code == 200:
+                        print_status("✅ フロントエンドサーバー起動完了", "🎉")
+                        startup_success = True
+                        break
+                except requests.exceptions.RequestException:
+                    # HTTPリクエストが失敗してもポートがリスニング中なら継続
+                    pass
+            
+            # 10秒ごとに状況を報告
+            if i % 10 == 0 and i > 0:
+                print_status(f"起動確認中... ({i}/90秒)", "🔍")
+            
+        except Exception as e:
             pass
+        
         time.sleep(1)
-        print(".", end="", flush=True)
+        if i % 5 == 0:  # 5秒ごとにドット表示
+            print(".", end="", flush=True)
     
-    print_status("❌ フロントエンドサーバーが起動しませんでした", "💥")
-    return None
+    if not startup_success:
+        print_status("❌ フロントエンドサーバーが起動しませんでした", "💥")
+        
+        # エラー情報を取得
+        if frontend_process.poll() is None:
+            frontend_process.terminate()
+            try:
+                stdout, stderr = frontend_process.communicate(timeout=5)
+                if stderr:
+                    print_status(f"エラー出力: {stderr.decode()[:300]}", "⚠️")
+            except:
+                pass
+        return None
+    
+    return frontend_process
 
 def main():
     """メイン関数"""

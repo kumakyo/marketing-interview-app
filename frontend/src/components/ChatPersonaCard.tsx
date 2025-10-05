@@ -49,7 +49,7 @@ const ChatPersonaCard: React.FC<ChatPersonaCardProps> = ({ persona, isSelected, 
               <span className="font-medium">居住地:</span> {persona.details?.居住地 || ''}
             </div>
             <div className="text-sm text-gray-600">
-              <span className="font-medium">関心事:</span> {persona.details?.関心事・悩み || ''}
+              <span className="font-medium">関心事:</span> {persona.details?.['関心事・悩み'] || ''}
             </div>
           </div>
           
