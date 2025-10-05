@@ -9,6 +9,7 @@ import ProductServiceForm from '@/components/ProductServiceForm';
 import CompetitorForm from '@/components/CompetitorForm';
 import ChatPersonaCard from '@/components/ChatPersonaCard';
 import ChatInterview from '@/components/ChatInterview';
+import InterviewResults from '@/components/InterviewResults';
 import InsightAnalysis from '@/components/InsightAnalysis';
 
 export default function Home() {
@@ -50,37 +51,46 @@ export default function Home() {
 
   // ステップ進行状況表示コンポーネント
   const StepProgress = () => (
-    <div className="mb-8 p-4 bg-white rounded-lg shadow-sm border">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">進行状況</h3>
-        <span className="text-sm text-gray-500">
-          ステップ {step + 1} / {steps.length}
-        </span>
-      </div>
-      
-      <div className="flex flex-wrap gap-2 mb-4">
-        {steps.map((stepInfo, index) => (
-          <div
-            key={stepInfo.id}
-            className={`flex-1 min-w-[120px] p-2 rounded-lg text-center text-sm ${
-              index < step
-                ? 'bg-green-100 text-green-800 border border-green-200'
-                : index === step
-                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                : 'bg-gray-100 text-gray-500 border border-gray-200'
-            }`}
-          >
-            <div className="font-medium">{stepInfo.title}</div>
-            <div className="text-xs mt-1">{stepInfo.description}</div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${((step + 1) / steps.length) * 100}%` }}
-        ></div>
+    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border">
+      <div className="flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          {steps.map((stepInfo, index) => (
+            <React.Fragment key={stepInfo.id}>
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                    index < step
+                      ? 'bg-green-500 text-white'
+                      : index === step
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {index + 1}
+                </div>
+                <span className={`text-xs mt-1 text-center max-w-[80px] ${
+                  index === step ? 'text-blue-600 font-medium' : 'text-gray-500'
+                }`}>
+                  {stepInfo.title}
+                </span>
+              </div>
+              
+              {index < steps.length - 1 && (
+                <div className="flex items-center">
+                  <svg 
+                    className={`w-4 h-4 ${
+                      index < step ? 'text-green-500' : 'text-gray-300'
+                    }`} 
+                    fill="currentColor" 
+                    viewBox="0 0 20 20"
+                  >
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -579,7 +589,7 @@ export default function Home() {
                   type="text"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="例: カラオケの新しい利用方法"
+                  placeholder="例: オンライン英会話サービス"
                   className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </label>
@@ -777,7 +787,7 @@ export default function Home() {
           <div className="max-w-4xl mx-auto space-y-6">
             {showProgress && <StepProgress />}
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">インタビュー質問</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">質問内容</h2>
               <p className="text-gray-600">
                 以下の質問でインタビューを実行します。質問は編集可能です。
               </p>
@@ -922,18 +932,10 @@ export default function Home() {
               </p>
             </div>
             
-            {Object.entries(interviewResults).map(([personaName, results]) => (
-              <div key={personaName} className="space-y-4">
-                <h3 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                  {personaName}さんのインタビュー
-                </h3>
-                <div className="space-y-4">
-                  {results.map((result, index) => (
-                    <InterviewCard key={index} result={result} index={index} />
-                  ))}
-                </div>
-              </div>
-            ))}
+            <InterviewResults 
+              results={interviewResults} 
+              personas={selectedPersonas}
+            />
             
             <div className="flex justify-center">
               <button
@@ -990,7 +992,7 @@ export default function Home() {
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-blue-900 mb-4">追加インタビュー質問</h3>
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">追加質問内容</h3>
               <div className="space-y-2">
                 {hypothesisData?.additional_questions?.map((question: string, index: number) => (
                   <div key={index} className="bg-white p-3 rounded border-l-4 border-blue-500">
@@ -1024,18 +1026,10 @@ export default function Home() {
               </p>
             </div>
             
-            {Object.entries(hypothesisInterviewResults).map(([personaName, results]) => (
-              <div key={personaName} className="space-y-4">
-                <h3 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                  {personaName}さんの仮説検証インタビュー
-                </h3>
-                <div className="space-y-4">
-                  {results.map((result, index) => (
-                    <InterviewCard key={index} result={result} index={index} />
-                  ))}
-                </div>
-              </div>
-            ))}
+            <InterviewResults 
+              results={hypothesisInterviewResults} 
+              personas={selectedPersonas}
+            />
             
             <div className="flex justify-center">
               <button
@@ -1225,7 +1219,7 @@ export default function Home() {
               {step === 0 && 'プロジェクト情報入力'}
               {step === 1 && 'ペルソナ生成'}
               {step === 2 && 'ペルソナ選択'}
-              {step === 3 && 'インタビュー質問編集'}
+              {step === 3 && '質問内容編集'}
               {step === 4 && '初回インタビュー実行'}
               {step === 5 && '初回インサイト分析'}
               {step === 6 && '仮説生成・追加質問'}

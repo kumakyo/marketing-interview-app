@@ -13,8 +13,11 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
 
   // Markdownの見出しを解析してセクション分けする
   const parseAnalysis = (text: string) => {
+    // 「*」を削除
+    const cleanText = text.replace(/\*/g, '');
+    
     const sections: { title: string; content: string; id: string }[] = [];
-    const lines = text.split('\n');
+    const lines = cleanText.split('\n');
     let currentSection: { title: string; content: string; id: string } | null = null;
 
     lines.forEach((line) => {
@@ -128,19 +131,6 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {sections.length > 0 && (
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="text-blue-600">💡</span>
-            <h4 className="font-semibold text-blue-900">使い方</h4>
-          </div>
-          <p className="text-sm text-blue-700">
-            各カードをクリックすると詳細な分析内容を確認できます。
-            複数のカードを同時に開いて比較することも可能です。
-          </p>
         </div>
       )}
     </div>

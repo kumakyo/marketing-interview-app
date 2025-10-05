@@ -114,7 +114,9 @@ class HistoryRecord(BaseModel):
     id: str
     timestamp: datetime
     project_info: ProjectInfo
-    final_analysis: str
+    analysis: str = ""  # 初回分析
+    final_analysis: str = ""  # 最終分析
+    hypothesis_and_questions: str = ""  # 仮説と質問
     personas_used: List[str]
 
 # --- グローバル変数 ---
@@ -520,6 +522,12 @@ async def get_default_questions(topic: Optional[str] = None):
         - 価格感や購入意向を確認できる質問
         - 自然な会話の流れになるような順番
         - マーケティング戦略立案に有用な洞察が得られる質問
+        - 質問文には**や[]などの装飾文字は使用せず、シンプルな文章で記載
+        - カテゴリ表記は不要、質問文のみを記載
+        
+        質問例:
+        普段、どのような音楽を聴くことが多いですか？
+        この商品・サービスに対してどのような印象を持ちますか？
         
         出力形式：
         1. [質問文]
@@ -829,22 +837,25 @@ async def generate_analysis():
         - 価格設定に対する反応と購入意向を分析
         - 価格に関する具体的な発言を根拠として提示
         
-        ## 9. 属性別ヒートマップ（四象限分析）
-        以下の軸で各ペルソナを分類し、図示してください：
-        - 縦軸：購買意欲（高い/低い）
-        - 横軸：ベネフィット共感度（高い/低い）
-        
-        ```
-        購買意欲高
-        　　│
-        　　│ [高共感・高意欲]     [低共感・高意欲]
-        　　│     ペルソナ名           ペルソナ名
-        ────┼────────────────────────
-        　　│ [高共感・低意欲]     [低共感・低意欲]
-        　　│     ペルソナ名           ペルソナ名
-        　　│
-        購買意欲低     ベネフィット共感度     高
-        ```
+## 9. 商品・サービス ポジショニングマップ
+以下の軸で対象商品・サービスと競合商品を分析し、図示してください：
+- 縦軸：顧客満足度（高い/低い）
+- 横軸：価格帯（高い/低い）
+
+```
+顧客満足度高
+　　│
+　　│ [高満足・高価格]     [高満足・低価格]
+　　│   競合A/対象商品        競合B
+────┼────────────────────────
+　　│ [低満足・高価格]     [低満足・低価格]
+　　│     競合C              競合D
+　　│
+顧客満足度低     価格帯低     価格帯高
+```
+
+各商品・サービスについて、インタビュー結果から判断される位置を示し、
+対象商品の競争優位性を分析してください。
         
         ## 10. マーケティング戦略の示唆
         - この分析結果から、具体的なマーケティング戦略を提案
@@ -857,6 +868,9 @@ async def generate_analysis():
         end_time = time.time()
         elapsed_time = end_time - current_session["start_time"]
         estimated_cost = (current_session["total_input_chars"] * INPUT_TOKEN_PRICE) + (current_session["total_output_chars"] * OUTPUT_TOKEN_PRICE)
+        
+        # 分析結果をセッションに保存
+        current_session["analysis"] = analysis_result
         
         return {
             "summaries": summaries,
@@ -1008,6 +1022,9 @@ async def generate_hypothesis():
                 "現在感じている不満や改善点はありますか？",
                 "将来的にどのような変化を期待しますか？"
             ]
+        
+        # 仮説と質問をセッションに保存
+        current_session["hypothesis_and_questions"] = hypothesis_and_questions_text
         
         return {
             "summaries": summaries,
@@ -1179,6 +1196,9 @@ async def generate_final_analysis():
         elapsed_time = end_time - current_session["start_time"]
         estimated_cost = (current_session["total_input_chars"] * INPUT_TOKEN_PRICE) + (current_session["total_output_chars"] * OUTPUT_TOKEN_PRICE)
         
+        # 最終分析をセッションに保存
+        current_session["final_analysis"] = final_analysis_result
+        
         return {
             "final_summaries": final_summaries,
             "final_analysis": final_analysis_result,
@@ -1305,7 +1325,9 @@ async def save_interview_history():
             id=str(uuid.uuid4()),
             timestamp=datetime.now(),
             project_info=current_session["project_info"],
-            final_analysis=final_analysis_summary,
+            analysis=current_session.get("analysis", ""),  # 初回分析を保存
+            final_analysis=current_session.get("final_analysis", final_analysis_summary),  # 最終分析を保存
+            hypothesis_and_questions=current_session.get("hypothesis_and_questions", ""),  # 仮説と質問を保存
             personas_used=[p.name for p in current_session.get("selected_personas", [])]
         )
         
