@@ -66,7 +66,7 @@ export default function Home() {
                       : 'bg-gray-200 text-gray-500'
                   }`}
                 >
-                  {index + 1}
+                  {index < step ? '✓' : index === step ? '●' : '○'}
                 </div>
                 <span className={`text-xs mt-1 text-center max-w-[80px] ${
                   index === step ? 'text-blue-600 font-medium' : 'text-gray-500'

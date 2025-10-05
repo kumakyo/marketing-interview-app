@@ -68,7 +68,7 @@ export default function ProductServiceForm({
         <textarea
           value={product.target_audience}
           onChange={(e) => onUpdate(product.id, 'target_audience', e.target.value)}
-          placeholder="例: 20-30代の音楽好きで、友人との時間を大切にする社会人。忙しい日常の中でもエンターテイメントを楽しみたい人。"
+          placeholder="例: 20-30代のビジネスパーソンで、キャリアアップや海外展開を目指す社会人。英語でのコミュニケーション能力向上を求める人。"
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows={3}
         />
@@ -94,7 +94,7 @@ export default function ProductServiceForm({
         <textarea
           value={product.benefit_reason}
           onChange={(e) => onUpdate(product.id, 'benefit_reason', e.target.value)}
-          placeholder="例: 音響エンジニア監修の高音質技術、SNS連携による簡単共有機能、音楽大学と共同開発のAI歌唱分析技術、24時間365日利用可能なクラウドインフラ。"
+          placeholder="例: 英語教育専門の資格を持つネイティブ講師陣、独自開発の学習進捗管理システム、TESOL認定カリキュラム、24時間対応可能な専用プラットフォーム。"
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows={3}
         />

@@ -44,8 +44,11 @@ const InterviewResults: React.FC<InterviewResultsProps> = ({ results, personas }
 
             <div className="space-y-4">
               {answers.map((answer, index) => {
+                // answerが文字列でない場合の安全な処理
+                const answerText = typeof answer === 'string' ? answer : String(answer);
+                
                 // 質問と回答を分離
-                const parts = answer.split('\n回答: ');
+                const parts = answerText.split('\n回答: ');
                 const question = parts[0].replace(/^\d+\.\s*/, ''); // 番号を削除
                 const response = parts[1] || '';
 

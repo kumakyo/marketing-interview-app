@@ -36,7 +36,7 @@ export default function CompetitorForm({
             type="text"
             value={competitor.name}
             onChange={(e) => onUpdate(index, 'name', e.target.value)}
-            placeholder="例: JOYSOUNDアプリ"
+            placeholder="例: ECCオンライン英会話"
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </label>
@@ -47,7 +47,7 @@ export default function CompetitorForm({
             type="text"
             value={competitor.price || ''}
             onChange={(e) => onUpdate(index, 'price', e.target.value)}
-            placeholder="例: 月額500円"
+            placeholder="例: 月額1,980円"
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </label>
@@ -69,7 +69,7 @@ export default function CompetitorForm({
         <textarea
           value={competitor.features || ''}
           onChange={(e) => onUpdate(index, 'features', e.target.value)}
-          placeholder="例: 豊富な楽曲数、採点機能、店舗との連携"
+          placeholder="例: ネイティブ教師24時間待機、マンツーマンレッスン、TOEIC対策コース"
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           rows={2}
         />
