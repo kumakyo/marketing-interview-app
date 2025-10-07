@@ -38,13 +38,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS設定 - より柔軟なアクセス許可
+# CORS設定 - 外部デバイスからのアクセスを許可
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 全てのオリジンを許可（セキュリティ要件に応じて調整）
+    allow_origins=["*"],  # 全てのオリジンを許可
     allow_credentials=False,  # 全オリジン許可時はcredentialsをFalseに
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],  # レスポンスヘッダーの公開を許可
 )
 
 # --- APIキーの設定 ---

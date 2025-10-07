@@ -1,7 +1,26 @@
 // API通信のユーティリティ関数
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// 外部アクセス用のAPI URLを動的に決定
+const getApiBaseUrl = () => {
+  // ブラウザ環境でのみ実行
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    // ローカルホストの場合はローカルAPI、それ以外は外部IPのAPIを使用
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    } else {
+      // 外部アクセスの場合は外部IPのAPIを使用
+      return 'http://35.243.121.35:8000';
+    }
+  }
+  
+  // サーバーサイドレンダリング時はデフォルト値
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,6 +29,12 @@ const api = axios.create({
   },
   // timeout機能を削除（インタビュー実行時に無制限の時間を許可）
 });
+
+// デバッグ用: API接続情報をコンソールに出力
+if (typeof window !== 'undefined') {
+  console.log('🔗 API Base URL:', API_BASE_URL);
+  console.log('🌐 Current hostname:', window.location.hostname);
+}
 
 export interface ProductService {
   id: string;
