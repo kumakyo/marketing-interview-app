@@ -1,21 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // 外部デバイスからのアクセスを許可
-  experimental: {
-    allowedDevOrigins: ['*']
-  },
-  // 開発サーバーの設定
-  devIndicators: {
-    buildActivity: false,
-  },
+  experimental: {},
+  
   // 画像の最適化設定
   images: {
     domains: ['api.dicebear.com'],
   },
-  // APIルートの設定
-  async rewrites() {
+  
+  // 開発サーバーの設定
+  async headers() {
     return [
-      // 必要に応じてAPIリライトルールを追加
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
     ];
   },
 }

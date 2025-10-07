@@ -7,12 +7,12 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     
-    // ローカルホストの場合はローカルAPI、それ以外は内部IPのAPIを使用
+    // ローカルホストの場合はローカルAPI、それ以外は外部グローバルIPのAPIを使用
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     } else {
-      // 外部アクセスの場合は内部IPのAPIを使用（ファイアウォール制限のため）
-      return 'http://10.146.0.2:8000';
+      // 外部アクセスの場合は外部グローバルIPのAPIを使用
+      return 'http://34.180.94.249:8000';
     }
   }
   
@@ -27,7 +27,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // timeout機能を削除（インタビュー実行時に無制限の時間を許可）
+  timeout: 120000, // 2分のタイムアウト（LLM処理のため長めに設定）
 });
 
 // デバッグ用: API接続情報をコンソールに出力
@@ -114,17 +114,17 @@ export interface FinalAnalysisResponse {
 }
 
 export const apiClient = {
-  // API接続テスト（短いタイムアウトを設定）
+  // API接続テスト（長めのタイムアウトを設定）
   testConnection: async (): Promise<{ status: string; message: string }> => {
     try {
-      const response = await api.get('/', { timeout: 5000 }); // 5秒のタイムアウト
+      const response = await api.get('/', { timeout: 30000 }); // 30秒のタイムアウト
       return { status: 'success', message: 'API接続成功' };
     } catch (error: any) {
       console.error('API接続エラー:', error);
       if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
         return { status: 'error', message: 'バックエンドサーバーに接続できません。サーバーが起動していることを確認してください。' };
       } else if (error.timeout || error.code === 'ECONNABORTED') {
-        return { status: 'error', message: 'API接続がタイムアウトしました。' };
+        return { status: 'error', message: 'API接続がタイムアウトしました。ネットワーク接続を確認してください。' };
       } else {
         return { status: 'error', message: `API接続エラー: ${error.message}` };
       }
