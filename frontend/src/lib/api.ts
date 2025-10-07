@@ -7,12 +7,12 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     
-    // ローカルホストの場合はローカルAPI、それ以外は外部IPのAPIを使用
+    // ローカルホストの場合はローカルAPI、それ以外は内部IPのAPIを使用
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     } else {
-      // 外部アクセスの場合は外部IPのAPIを使用
-      return 'http://35.243.121.35:8000';
+      // 外部アクセスの場合は内部IPのAPIを使用（ファイアウォール制限のため）
+      return 'http://10.146.0.2:8000';
     }
   }
   
