@@ -41,6 +41,7 @@ export default function Home() {
   const [showAdditionalQuestionDialog, setShowAdditionalQuestionDialog] = useState(false);
   const [additionalQuestions, setAdditionalQuestions] = useState<string[]>(['', '', '', '', '']);
   const [additionalInterviewResults, setAdditionalInterviewResults] = useState<Record<string, InterviewResult[]>>({});
+  const [forceActiveTab, setForceActiveTab] = useState<'summary' | 'insights' | number | undefined>(undefined);
 
   // ステップ定義
   const steps = [
@@ -999,12 +1000,13 @@ export default function Home() {
             
             {personaSummaries.length > 0 ? (
               <>
-                <ComprehensiveAnalysisView
-                  personaSummaries={personaSummaries}
-                  finalInsight={finalAnalysis}
-                  onAdditionalInterview={() => setShowAdditionalQuestionDialog(true)}
-                  loading={loading}
-                />
+                 <ComprehensiveAnalysisView
+                   personaSummaries={personaSummaries}
+                   finalInsight={finalAnalysis}
+                   onAdditionalInterview={() => setShowAdditionalQuestionDialog(true)}
+                   loading={loading}
+                   forceActiveTab={forceActiveTab}
+                 />
 
                 {/* 追加質問ダイアログ */}
                 {showAdditionalQuestionDialog && (
@@ -1145,6 +1147,10 @@ export default function Home() {
 
                               setProgress(100);
                               setProgressMessage('追加インタビュー完了');
+                              
+                              // 最初のペルソナのインタビュー詳細タブに遷移
+                              setForceActiveTab(0);
+                              
                               alert('追加インタビューが完了しました');
                             } catch (err: any) {
                               setError('追加インタビューの実行に失敗しました: ' + (err.response?.data?.detail || err.message));

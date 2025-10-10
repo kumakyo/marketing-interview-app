@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InterviewResult } from '@/lib/api';
 import InsightAnalysis from './InsightAnalysis';
 import ChatStyleInterview from './ChatStyleInterview';
@@ -17,15 +17,24 @@ interface ComprehensiveAnalysisViewProps {
   finalInsight: string;
   onAdditionalInterview?: () => void;
   loading?: boolean;
+  forceActiveTab?: 'summary' | 'insights' | number;
 }
 
 const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
   personaSummaries,
   finalInsight,
   onAdditionalInterview,
-  loading
+  loading,
+  forceActiveTab
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'insights' | number>('summary');
+
+  // forceActiveTabが変更されたときにactiveTabを更新
+  useEffect(() => {
+    if (forceActiveTab !== undefined) {
+      setActiveTab(forceActiveTab);
+    }
+  }, [forceActiveTab]);
 
   return (
     <div className="space-y-6">

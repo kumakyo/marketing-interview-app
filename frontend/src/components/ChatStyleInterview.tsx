@@ -43,7 +43,7 @@ const ChatStyleInterview: React.FC<ChatStyleInterviewProps> = ({
         <div>
           <h4 className="font-semibold text-gray-900 text-lg">{personaName}</h4>
           <p className="text-sm text-gray-500">
-            {personaDetails?.年齢}歳 • {personaDetails?.職業}
+            {personaDetails?.職業}
           </p>
         </div>
       </div>
