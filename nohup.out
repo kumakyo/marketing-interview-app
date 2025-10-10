@@ -1,0 +1,236 @@
+INFO:     Will watch for changes in these directories: ['/home/kyosuke/marketing-interview-app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [20565] using StatReload
+🚀 tames interview を起動中...
+==================================================
+🧹 既存のプロセスをクリーンアップ中...
+🔧 Next.jsキャッシュをクリアしました
+🚀 バックエンドを起動中...
+.INFO:     Started server process [20567]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:59336 - "GET / HTTP/1.1" 200 OK
+
+> marketing-interview-desktop@1.0.0 dev-network-3001
+> next dev -H 0.0.0.0 -p 3001
+
+🎉 ✅ バックエンド起動完了
+🌐 フロントエンドを起動中...
+🔧 ✅ npm依存関係OK
+⏳ フロントエンドの起動を確認中...
+.   ▲ Next.js 15.5.4
+   - Local:        http://localhost:3001
+   - Network:      http://0.0.0.0:3001
+
+ ✓ Starting...
+ ✓ Ready in 3.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 21.3s (774 modules)
+ GET / 200 in 22346ms
+ GET / 200 in 891ms
+INFO:     127.0.0.1:59292 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59292 - "GET /api/interview-history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59292 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59292 - "GET /api/interview-history HTTP/1.1" 200 OK
+🎉 ✅ フロントエンド起動完了
+
+============================================================
+🔧 🎉 tames interview が起動しました！
+
+🔧 📱 アクセス先:
+  🔗    http://localhost:3001
+  🔗    http://10.146.0.2:3001
+  🔗    http://35.243.121.35:3001
+
+🔧 📚 API文書:
+  📖    http://localhost:8000/docs
+============================================================
+🔧 ⏹️ 終了するには Ctrl+C を押してください
+🔧 🌐 ブラウザでアプリケーションを開きました
+🔧 ⚠️ フロントエンドプロセスが終了しました
+INFO:     74.82.47.2:2330 - "GET / HTTP/1.1" 200 OK
+INFO:     74.82.47.50:63307 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     74.82.47.14:59533 - "GET http%3A//api.ipify.org/?format=json HTTP/1.1" 404 Not Found
+INFO:     74.82.47.42:20181 - "CONNECT www.shadowserver.org%3A443 HTTP/1.1" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [20567]
+INFO:     Stopping reloader process [20565]
+INFO:     Will watch for changes in these directories: ['/home/kyosuke/marketing-interview-app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [4790] using StatReload
+🚀 tames interview を起動中...
+==================================================
+🧹 既存のプロセスをクリーンアップ中...
+🔧 Next.jsキャッシュをクリアしました
+🚀 バックエンドを起動中...
+.INFO:     Started server process [4800]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:36284 - "GET / HTTP/1.1" 200 OK
+
+> marketing-interview-desktop@1.0.0 dev-network-3001
+> next dev -H 0.0.0.0 -p 3001
+
+🎉 ✅ バックエンド起動完了
+🌐 フロントエンドを起動中...
+🔧 ✅ npm依存関係OK
+⏳ フロントエンドの起動を確認中...
+.   ▲ Next.js 15.5.4
+   - Local:        http://localhost:3001
+   - Network:      http://0.0.0.0:3001
+
+ ✓ Starting...
+ ✓ Ready in 4.3s
+ ○ Compiling / ...
+ ✓ Compiled / in 13.3s (774 modules)
+ GET / 200 in 14331ms
+INFO:     127.0.0.1:39206 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39206 - "GET /api/interview-history HTTP/1.1" 200 OK
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 1856ms (488 modules)
+ GET /favicon.ico 200 in 2114ms
+ GET / 200 in 605ms
+INFO:     14.11.21.160:34590 - "GET / HTTP/1.1" 200 OK
+ ⚠ Cross origin request detected from 34.180.94.249 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+INFO:     14.11.21.160:34590 - "GET /api/interview-history HTTP/1.1" 200 OK
+🎉 ✅ フロントエンド起動完了
+
+============================================================
+🔧 🎉 tames interview が起動しました！
+
+🔧 📱 アクセス先:
+  🔗    http://localhost:3001
+  🔗    http://10.146.0.2:3001
+  🔗    http://35.243.121.35:3001
+
+🔧 📚 API文書:
+  📖    http://localhost:8000/docs
+============================================================
+🔧 ⏹️ 終了するには Ctrl+C を押してください
+🔧 🌐 ブラウザでアプリケーションを開きました
+🔧 ⚠️ フロントエンドプロセスが終了しました
+INFO:     14.11.21.160:5916 - "OPTIONS /api/generate-personas HTTP/1.1" 200 OK
+INFO:main:生成されたペルソナテキスト: ペルソナ1: 鈴木 美咲
+年齢: 22歳
+性別: 女性
+職業: アパレルショップ店員
+年収帯: 250万円
+居住地: 東京都在住
+家族構成: 一人暮らし
+趣味・余暇: 音楽フェス、ファッション雑誌を読む、SNSでの情報収集、友人とカフェ巡り、週末のショッピング
+関心事・悩み: 最新のトレンド、SNS映え、人間関係、将来への漠然とした不安、金銭管理
+
+ペルソナ2: 佐藤 大輝
+年齢: 24歳
+性別: 男性
+職業: 会社員（IT企業勤務）
+年収帯: 400万円
+居住地: 神奈川県在住
+家族構成: 両親と同居
+趣味・余暇: ゲーム、アニメ鑑賞、オンラインでの情報交換、大学時代の友人との飲み会、カラオケ
+関心事・悩み: 仕事でのスキルアップ、将来のキャリアプラン、交友関係の維持、貯金、結婚
+
+ペルソナ3: 田中 結衣
+年齢: 21歳
+性別: 女性
+職業: 大学生
+年収帯: 学生のため収入なし
+居住地: 大阪府在住
+家族構成: 実家暮らし
+趣味・余暇: バイト、友達と遊ぶ、TikTok、YouTube鑑賞、カラオケ、旅行
+関心事・悩み: 就職活動、学費と生活費、友達との関係、将来の夢、恋愛
+...
+INFO:main:分割されたペルソナ数: 3
+INFO:main:ペルソナ1: 鈴木 美咲 - 詳細数: 10
+INFO:main:ペルソナ2: 佐藤 大輝 - 詳細数: 10
+INFO:main:ペルソナ3: 田中 結衣 - 詳細数: 10
+INFO:main:パースされたペルソナ数: 3
+INFO:main:ペルソナ0: 名前=鈴木 美咲, 詳細キー数=10
+INFO:main:ペルソナ1: 名前=佐藤 大輝, 詳細キー数=10
+INFO:main:ペルソナ2: 名前=田中 結衣, 詳細キー数=10
+INFO:     14.11.21.160:5916 - "POST /api/generate-personas HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4800]
+INFO:     Started server process [6645]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [6645]
+INFO:     Stopping reloader process [4790]
+INFO:     Will watch for changes in these directories: ['/home/kyosuke/marketing-interview-app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [2037] using StatReload
+🚀 tames interview を起動中...
+==================================================
+🧹 既存のプロセスをクリーンアップ中...
+🔧 Next.jsキャッシュをクリアしました
+🚀 バックエンドを起動中...
+.INFO:     Started server process [2039]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:47772 - "GET / HTTP/1.1" 200 OK
+
+> marketing-interview-desktop@1.0.0 dev-network-3001
+> next dev -H 0.0.0.0 -p 3001
+
+🎉 ✅ バックエンド起動完了
+🌐 フロントエンドを起動中...
+🔧 ✅ npm依存関係OK
+⏳ フロントエンドの起動を確認中...
+.   ▲ Next.js 15.5.4
+   - Local:        http://localhost:3001
+   - Network:      http://0.0.0.0:3001
+
+ ✓ Starting...
+ ✓ Ready in 4.1s
+ ○ Compiling / ...
+ ✓ Compiled / in 13.3s (774 modules)
+ GET / 200 in 14165ms
+INFO:     127.0.0.1:36378 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36378 - "GET /api/interview-history HTTP/1.1" 200 OK
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 1851ms (488 modules)
+ GET /favicon.ico 200 in 2078ms
+ GET / 200 in 427ms
+ GET /favicon.ico 200 in 14ms
+INFO:     14.11.21.160:18196 - "GET / HTTP/1.1" 200 OK
+ ⚠ Cross origin request detected from 34.180.94.249 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+INFO:     14.11.21.160:18196 - "GET /api/interview-history HTTP/1.1" 200 OK
+🎉 ✅ フロントエンド起動完了
+
+============================================================
+🔧 🎉 tames interview が起動しました！
+
+🔧 📱 アクセス先:
+  🔗    http://localhost:3001
+  🔗    http://10.146.0.2:3001
+  🔗    http://35.243.121.35:3001
+
+🔧 📚 API文書:
+  📖    http://localhost:8000/docs
+============================================================
+🔧 ⏹️ 終了するには Ctrl+C を押してください
+🔧 🌐 ブラウザでアプリケーションを開きました
+🔧 ⚠️ フロントエンドプロセスが終了しました
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2039]
+INFO:     Started server process [3224]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [3224]
+INFO:     Stopping reloader process [2037]

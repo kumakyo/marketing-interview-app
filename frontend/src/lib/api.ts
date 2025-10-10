@@ -231,6 +231,18 @@ export const apiClient = {
     const response = await api.get(`/api/interview-history/${historyId}`);
     return response.data;
   },
+
+  // インタビューサマリを生成
+  generateInterviewSummary: async (): Promise<{ 
+    summaries: {
+      persona_name: string;
+      main_findings: string;
+      main_implications: string;
+    }[] 
+  }> => {
+    const response = await api.post('/api/generate-interview-summary');
+    return response.data;
+  },
 };
 
 export default apiClient;

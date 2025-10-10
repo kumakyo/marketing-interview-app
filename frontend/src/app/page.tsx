@@ -11,6 +11,7 @@ import ChatPersonaCard from '@/components/ChatPersonaCard';
 import ChatInterview from '@/components/ChatInterview';
 import InterviewResults from '@/components/InterviewResults';
 import InsightAnalysis from '@/components/InsightAnalysis';
+import ComprehensiveAnalysisView from '@/components/ComprehensiveAnalysisView';
 
 export default function Home() {
   const [step, setStep] = useState(0); // 0: プロジェクト情報入力から開始
@@ -36,18 +37,17 @@ export default function Home() {
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [interviewHistory, setInterviewHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [personaSummaries, setPersonaSummaries] = useState<any[]>([]);
+  const [showAdditionalQuestionDialog, setShowAdditionalQuestionDialog] = useState(false);
+  const [additionalQuestions, setAdditionalQuestions] = useState<string[]>(['', '', '', '', '']);
+  const [additionalInterviewResults, setAdditionalInterviewResults] = useState<Record<string, InterviewResult[]>>({});
 
   // ステップ定義
   const steps = [
-    { id: 0, title: "プロジェクト情報", description: "商品・サービス情報と競合情報を入力" },
-    { id: 1, title: "ペルソナ設定", description: "ペルソナの人数と特徴を設定" },
-    { id: 2, title: "ペルソナ生成", description: "AIがペルソナを自動生成" },
-    { id: 3, title: "ペルソナ選択", description: "インタビューするペルソナを選択" },
-    { id: 4, title: "インタビュー実行", description: "選択したペルソナとインタビュー" },
-    { id: 5, title: "初回分析", description: "インタビュー結果の初回インサイト分析" },
-    { id: 6, title: "仮説生成", description: "追加仮説と質問を生成" },
-    { id: 7, title: "追加インタビュー", description: "仮説検証のための追加インタビュー" },
-    { id: 8, title: "最終分析", description: "全インタビューの最終インサイト分析" }
+    { id: 0, title: "商品・ペルソナ設定", description: "商品情報とペルソナ設定" },
+    { id: 1, title: "ペルソナ選択", description: "インタビューするペルソナを選択" },
+    { id: 2, title: "質問内容作成", description: "インタビュー質問を作成" },
+    { id: 3, title: "分析結果", description: "インタビューと分析結果" }
   ];
 
   // ステップ進行状況表示コンポーネント
@@ -180,9 +180,20 @@ export default function Home() {
       setProgress(100);
       setProgressMessage('ペルソナ生成完了');
       setPersonas(response.personas);
-      setStep(2);
+      setStep(1);
     } catch (err: any) {
-      setError('ペルソナの生成に失敗しました: ' + (err.response?.data?.detail || err.message));
+      const errorMessage = err.response?.data?.detail || err.message;
+      
+      // APIオーバーロードエラーの場合は再試行を促す
+      if (errorMessage.includes('過負荷') || 
+          errorMessage.includes('overloaded') || 
+          errorMessage.includes('503') ||
+          errorMessage.includes('504') ||
+          errorMessage.includes('timeout')) {
+        setError('⚠️ APIが一時的に過負荷またはタイムアウト状態です。30秒ほど待ってから「ペルソナを生成」ボタンをもう一度クリックしてください。');
+      } else {
+        setError('ペルソナの生成に失敗しました: ' + errorMessage);
+      }
     } finally {
       setLoading(false);
       setProgress(0);
@@ -225,7 +236,7 @@ export default function Home() {
       
       setProgress(100);
       setProgressMessage('準備完了');
-      setStep(3);
+      setStep(2);
     } catch (err: any) {
       setError('ペルソナの選択に失敗しました: ' + (err.response?.data?.detail || err.message));
     } finally {
@@ -241,33 +252,29 @@ export default function Home() {
     setProgress(0);
 
     try {
+      // ステップ1: 初回インタビューを実行
       const results: Record<string, InterviewResult[]> = {};
       const totalPersonas = selectedPersonas.length;
       const totalQuestions = questions.length;
       
+      setProgressMessage('初回インタビューを実行中...');
       for (let i = 0; i < selectedPersonas.length; i++) {
-        // ペルソナごとの基本進行率を計算
-        const baseProgress = Math.round((i / totalPersonas) * 100);
-        
+        const baseProgress = Math.round((i / (totalPersonas * 5)) * 100);
         setProgress(baseProgress);
-        setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} のインタビューを開始中...`);
+        setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} の初回インタビュー中...`);
         
-        // 質問ごとの詳細進行を表示するため、一時的に進行率を細かく更新
         let detailedProgress = baseProgress;
-        const progressPerQuestion = Math.round((1 / totalPersonas) * 100 / totalQuestions);
+        const progressPerQuestion = Math.round((1 / (totalPersonas * 5)) * 100 / totalQuestions);
         
-        // インタビュー実行（実際の実装では質問ごとの進行は表示されませんが、
-        // ここでは推定進行度を段階的に更新）
         const questionCount = questions.length;
-        const estimatedTimePerQuestion = 1000; // 1秒あたり1質問と仮定
+        const estimatedTimePerQuestion = 1000;
         
-        // 段階的に進行状況を更新
         const updateProgressInterval = setInterval(() => {
-          if (detailedProgress < baseProgress + Math.round((1 / totalPersonas) * 90)) {
+          if (detailedProgress < baseProgress + Math.round((1 / (totalPersonas * 5)) * 90)) {
             detailedProgress += 2;
             setProgress(detailedProgress);
             const currentQuestionEstimate = Math.min(
-              Math.floor(((detailedProgress - baseProgress) / (100 / totalPersonas)) * questionCount) + 1,
+              Math.floor(((detailedProgress - baseProgress) / (100 / (totalPersonas * 5))) * questionCount) + 1,
               questionCount
             );
             setProgressMessage(
@@ -280,11 +287,10 @@ export default function Home() {
           const response = await apiClient.conductInterview(i, questions);
           results[response.persona_name] = response.interview_results;
           
-          // インタビュー完了時の進行率
           clearInterval(updateProgressInterval);
-          const completedProgress = Math.round(((i + 1) / totalPersonas) * 100);
+          const completedProgress = Math.round(((i + 1) / (totalPersonas * 5)) * 100);
           setProgress(completedProgress);
-          setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} のインタビュー完了`);
+          setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} の初回インタビュー完了`);
           
         } catch (personaError) {
           clearInterval(updateProgressInterval);
@@ -292,12 +298,96 @@ export default function Home() {
         }
       }
       
-      setProgress(100);
-      setProgressMessage('すべてのインタビューが完了しました');
       setInterviewResults(results);
-      setStep(4);
+      setProgress(20);
+      
+      // ステップ2: インタビューサマリを生成
+      setProgressMessage('インタビューサマリを生成中...');
+      const summaryResponse = await apiClient.generateInterviewSummary();
+      setProgress(30);
+      
+      // ステップ3: 初回分析を生成
+      setProgressMessage('初回インサイト分析を生成中...');
+      const analysisResponse = await apiClient.generateAnalysis();
+      setAnalysis(analysisResponse.analysis);
+      setProgress(40);
+      
+      // ステップ4: 仮説を生成
+      setProgressMessage('マーケティング仮説と追加質問を生成中...');
+      const hypothesisResponse = await apiClient.generateHypothesis();
+      setHypothesisData(hypothesisResponse);
+      setProgress(50);
+      
+      // ステップ5: 仮説検証インタビューを実行
+      setProgressMessage('仮説検証インタビューを実行中...');
+      const hypothesisResults: Record<string, InterviewResult[]> = {};
+      
+      const hypothesisText = hypothesisResponse.hypothesis_and_questions || '';
+      const questionLines = hypothesisText.split('\n').filter(line => 
+        line.trim().startsWith('Q') || 
+        line.trim().match(/^\d+\./) ||
+        line.trim().includes('？') || line.trim().includes('?')
+      );
+      
+      const extractedQuestions = questionLines.map(line => 
+        line.replace(/^[Q\d\.\s\-\*]+/, '').trim()
+      ).filter(q => q.length > 5);
+      
+      for (let i = 0; i < selectedPersonas.length; i++) {
+        const baseProgress = 50 + Math.round((i / totalPersonas) * 30);
+        setProgress(baseProgress);
+        setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} の仮説検証インタビュー中...`);
+        
+        const response = await apiClient.conductHypothesisInterview(i, extractedQuestions);
+        hypothesisResults[response.persona_name] = response.interview_results;
+        
+        const completedProgress = 50 + Math.round(((i + 1) / totalPersonas) * 30);
+        setProgress(completedProgress);
+        setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} の仮説検証完了`);
+      }
+      
+      setHypothesisInterviewResults(hypothesisResults);
+      setProgress(80);
+      
+      // ステップ6: 最終分析を生成
+      setProgressMessage('最終マーケティング戦略分析を生成中...');
+      const finalResponse = await apiClient.generateFinalAnalysis();
+      setFinalAnalysis(finalResponse.final_analysis);
+      setFinalStats(finalResponse.stats);
+      setProgress(90);
+      
+      // ステップ7: 統合サマリを作成
+      setProgressMessage('統合分析を作成中...');
+      const personaSummariesData = summaryResponse.summaries.map((summary: any) => {
+        const personaName = summary.persona_name;
+        const persona = selectedPersonas.find(p => p.name === personaName);
+        return {
+          personaName: personaName,
+          mainFindings: summary.main_findings,
+          mainImplications: summary.main_implications,
+          initialInterview: results[personaName] || [],
+          additionalInterview: hypothesisResults[personaName] || [],
+          personaDetails: persona?.details || {}
+        };
+      });
+      
+      setPersonaSummaries(personaSummariesData);
+      setProgress(100);
+      setProgressMessage('分析完了');
+      setStep(3);
     } catch (err: any) {
-      setError('インタビューの実行に失敗しました: ' + (err.response?.data?.detail || err.message));
+      const errorMessage = err.response?.data?.detail || err.message;
+      
+      // APIオーバーロードエラーの場合は再試行を促す
+      if (errorMessage.includes('過負荷') || 
+          errorMessage.includes('overloaded') || 
+          errorMessage.includes('503') ||
+          errorMessage.includes('504') ||
+          errorMessage.includes('timeout')) {
+        setError('⚠️ APIが一時的に過負荷またはタイムアウト状態です。30秒ほど待ってから「インタビューを実行」ボタンをもう一度クリックしてください。');
+      } else {
+        setError('インタビューまたは分析の実行に失敗しました: ' + errorMessage);
+      }
     } finally {
       setLoading(false);
       setProgress(0);
@@ -664,41 +754,9 @@ export default function Home() {
               )}
             </div>
 
-            <div className="flex justify-center">
-              <button
-                onClick={() => setStep(1)}
-                disabled={loading || !topic.trim() || productServices.some(p => 
-                  !p.name.trim() || !p.target_audience.trim() || !p.benefits.trim() || 
-                  !p.benefit_reason.trim() || !p.basic_info.trim()
-                )}
-                className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                次へ：ペルソナ生成
-              </button>
-            </div>
-          </div>
-        );
-
-      case 1:
-        return (
-          <div className="max-w-2xl mx-auto space-y-6">
-            {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">ペルソナ生成</h2>
-              <p className="text-lg text-gray-600 mb-8">
-                入力された情報を基にAIがペルソナを生成します
-              </p>
-            </div>
-            
-            <div className="bg-gray-50 rounded-lg p-6">
-              <h3 className="font-semibold text-gray-900 mb-2">プロジェクト概要</h3>
-              <p><strong>トピック:</strong> {topic}</p>
-              <p><strong>商品・サービス数:</strong> {productServices.length}</p>
-              <p><strong>競合数:</strong> {competitors.length}</p>
-            </div>
-
+            {/* ペルソナ生成設定 */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-              <h3 className="font-semibold text-gray-900 mb-4">ペルソナ生成設定</h3>
+              <h3 className="font-semibold text-gray-900 mb-4 text-xl">ペルソナ生成設定</h3>
               
               <div>
                 <label htmlFor="personaCount" className="block text-sm font-medium text-gray-700 mb-2">
@@ -736,18 +794,15 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => setStep(0)}
-                className="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-medium"
-              >
-                戻る
-              </button>
+
+            <div className="flex justify-center">
               <button
                 onClick={handleGeneratePersonas}
-                disabled={loading}
-                className="bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                disabled={loading || !topic.trim() || productServices.some(p => 
+                  !p.name.trim() || !p.target_audience.trim() || !p.benefits.trim() || 
+                  !p.benefit_reason.trim() || !p.basic_info.trim()
+                )}
+                className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {loading ? <LoadingSpinner size="sm" /> : 'ペルソナを生成'}
               </button>
@@ -755,7 +810,7 @@ export default function Home() {
           </div>
         );
 
-      case 2:
+      case 1:
         return (
           <div className="space-y-6">
             {showProgress && <StepProgress />}
@@ -782,7 +837,7 @@ export default function Home() {
             
             <div className="flex justify-center space-x-4">
               <button
-                onClick={() => setStep(1)}
+                onClick={() => setStep(0)}
                 className="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-medium"
               >
                 戻る
@@ -798,7 +853,7 @@ export default function Home() {
           </div>
         );
 
-      case 3:
+      case 2:
         return (
           <div className="max-w-4xl mx-auto space-y-6">
             {showProgress && <StepProgress />}
@@ -915,7 +970,7 @@ export default function Home() {
             
             <div className="flex justify-center space-x-4">
               <button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(1)}
                 className="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-medium"
               >
                 戻る
@@ -937,209 +992,296 @@ export default function Home() {
           </div>
         );
 
-      case 4:
+      case 3:
         return (
-          <div className="space-y-8">
+          <div className="max-w-7xl mx-auto space-y-8">
             {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">インタビュー結果</h2>
-              <p className="text-gray-600">
-                各ペルソナとのインタビュー結果です
-              </p>
-            </div>
             
-            <InterviewResults 
-              results={interviewResults} 
-              personas={selectedPersonas}
-            />
-            
-            <div className="flex justify-center">
-              <button
-                onClick={handleGenerateAnalysis}
-                disabled={loading}
-                className="bg-purple-600 text-white py-3 px-8 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {loading ? <LoadingSpinner size="sm" text="分析を生成中..." /> : '初回インサイト分析を生成'}
-              </button>
-            </div>
-          </div>
-        );
+            {personaSummaries.length > 0 ? (
+              <>
+                <ComprehensiveAnalysisView
+                  personaSummaries={personaSummaries}
+                  finalInsight={finalAnalysis}
+                  onAdditionalInterview={() => setShowAdditionalQuestionDialog(true)}
+                  loading={loading}
+                />
 
-      case 5:
-        return (
-          <div className="max-w-6xl mx-auto space-y-6">
-            {showProgress && <StepProgress />}
-            
-            <InsightAnalysis 
-              analysis={analysis} 
-              title="🔍 初回インサイト分析結果"
-            />
-            
-            <div className="flex justify-center">
-              <button
-                onClick={handleGenerateHypothesis}
-                disabled={loading}
-                className="bg-orange-600 text-white py-3 px-8 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {loading ? <LoadingSpinner size="sm" text="仮説を生成中..." /> : '仮説と追加質問を生成'}
-              </button>
-            </div>
-          </div>
-        );
+                {/* 追加質問ダイアログ */}
+                {showAdditionalQuestionDialog && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-bold text-gray-900">追加質問インタビュー</h3>
+                        <button
+                          onClick={() => setShowAdditionalQuestionDialog(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
 
-      case 6:
-        return (
-          <div className="max-w-6xl mx-auto space-y-6">
-            {showProgress && <StepProgress />}
-            
-            <InsightAnalysis 
-              analysis={hypothesisData?.hypothesis_and_questions || ''} 
-              title="💭 マーケティング仮説と検証質問"
-            />
-            
-            <div className="flex justify-center">
-              <button
-                onClick={handleConductHypothesisInterview}
-                disabled={loading}
-                className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {loading ? <LoadingSpinner size="sm" text="仮説検証インタビューを実行中..." /> : '仮説検証インタビューを実行'}
-              </button>
-            </div>
-          </div>
-        );
+                      <p className="text-gray-600 mb-6">
+                        追加で深掘りしたい質問を入力してください（初期5問、追加可能）
+                      </p>
 
-      case 7:
-        return (
-          <div className="space-y-8">
-            {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">仮説検証インタビュー結果</h2>
-              <p className="text-gray-600">
-                各ペルソナとの仮説検証インタビュー結果
-              </p>
-            </div>
-            
-            <InterviewResults 
-              results={hypothesisInterviewResults} 
-              personas={selectedPersonas}
-            />
-            
-            <div className="flex justify-center">
-              <button
-                onClick={handleGenerateFinalAnalysis}
-                disabled={loading}
-                className="bg-purple-600 text-white py-3 px-8 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {loading ? <LoadingSpinner size="sm" text="最終分析を生成中..." /> : '最終マーケティング戦略分析を生成'}
-              </button>
-            </div>
-          </div>
-        );
+                      {/* Excel アップロード */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h4 className="text-md font-medium text-blue-900 mb-2">Excelファイルから質問を読み込み</h4>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            
+                            try {
+                              setLoading(true);
+                              const response = await apiClient.uploadExcelQuestions(file);
+                              setAdditionalQuestions(response.questions);
+                              alert(`${response.count}個の質問を読み取りました`);
+                            } catch (err) {
+                              setError('Excelファイルの読み取りに失敗しました');
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          disabled={loading}
+                          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
+                        />
+                      </div>
 
-      case 8:
-        return (
-          <div className="max-w-6xl mx-auto space-y-6">
-            {showProgress && <StepProgress />}
-            
-            <InsightAnalysis 
-              analysis={finalAnalysis} 
-              title="🎯 最終マーケティング戦略分析"
-            />
-            
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={async () => {
-                  try {
-                    await apiClient.saveInterviewHistory();
-                    alert('結果を履歴に保存しました');
-                    
-                    // 履歴を再読み込み
-                    const historyResponse = await apiClient.getInterviewHistory();
-                    setInterviewHistory(historyResponse.history);
-                  } catch (err: any) {
-                    setError('履歴の保存に失敗しました: ' + (err.response?.data?.detail || err.message));
-                  }
-                }}
-                className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 font-medium"
-              >
-                結果を保存
-              </button>
-              <button
-                onClick={() => {
-                  setStep(0);
-                  setTopic('');
-                  setProductServices([{
-                    id: '1',
-                    name: '',
-                    target_audience: '',
-                    benefits: '',
-                    benefit_reason: '',
-                    basic_info: ''
-                  }]);
-                  setCompetitors([]);
-                  setPersonas([]);
-                  setSelectedPersonas([]);
-                  setQuestions([]);
-                  setInterviewResults({});
-                  setAnalysis('');
-                  setHypothesisData(null);
-                  setHypothesisInterviewResults({});
-                  setFinalAnalysis('');
-                }}
-                className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 font-medium"
-              >
-                新しいインタビューを開始
-              </button>
-              <button
-                onClick={() => {
-                  const element = document.createElement('a');
-                  
-                  // 商品・サービス情報をレポートに含める
-                  let productsInfo = '';
-                  productServices.forEach((product, index) => {
-                    productsInfo += `
-                    商品・サービス ${index + 1}: ${product.name}
-                    ターゲット: ${product.target_audience}
-                    ベネフィット: ${product.benefits}
-                    根拠: ${product.benefit_reason}
-                    基本情報: ${product.basic_info}
-                    `;
-                  });
-                  
-                  let competitorsInfo = '';
-                  if (competitors.length > 0) {
-                    competitorsInfo = '\n=== 競合情報 ===\n';
-                    competitors.forEach((competitor, index) => {
-                      competitorsInfo += `
-                      競合 ${index + 1}: ${competitor.name}
-                      説明: ${competitor.description}
-                      価格: ${competitor.price || 'N/A'}
-                      特徴: ${competitor.features || 'N/A'}
-                      `;
-                    });
-                  }
-                  
-                  const file = new Blob([
-                    `tames interview - 最終レポート\n\n`,
-                    `トピック: ${topic}\n\n`,
-                    `=== 商品・サービス情報 ===\n${productsInfo}\n`,
-                    competitorsInfo,
-                    `\n=== 初回インサイト分析 ===\n${analysis}\n\n`,
-                    `=== 仮説と追加質問 ===\n${hypothesisData?.hypothesis_and_questions || ''}\n\n`,
-                    `=== 最終マーケティング戦略分析 ===\n${finalAnalysis}\n\n`
-                  ], { type: 'text/plain' });
-                  element.href = URL.createObjectURL(file);
-                  element.download = `マーケティング分析レポート_${topic}_${new Date().toISOString().split('T')[0]}.txt`;
-                  document.body.appendChild(element);
-                  element.click();
-                  document.body.removeChild(element);
-                }}
-                className="bg-gray-600 text-white py-3 px-8 rounded-lg hover:bg-gray-700 font-medium"
-              >
-                レポートをダウンロード
-              </button>
-            </div>
+                      {/* 質問入力フィールド */}
+                      <div className="space-y-3 mb-4">
+                        {additionalQuestions.map((question, index) => (
+                          <div key={index} className="flex items-start space-x-2">
+                            <span className="text-sm font-medium text-gray-700 mt-2 min-w-[60px]">
+                              質問 {index + 1}
+                            </span>
+                            <textarea
+                              value={question}
+                              onChange={(e) => {
+                                const newQuestions = [...additionalQuestions];
+                                newQuestions[index] = e.target.value;
+                                setAdditionalQuestions(newQuestions);
+                              }}
+                              placeholder="質問内容を入力してください..."
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              rows={2}
+                            />
+                            {additionalQuestions.length > 1 && (
+                              <button
+                                onClick={() => {
+                                  const newQuestions = additionalQuestions.filter((_, i) => i !== index);
+                                  setAdditionalQuestions(newQuestions);
+                                }}
+                                className="text-red-600 hover:text-red-800 mt-2"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 質問追加ボタン */}
+                      <button
+                        onClick={() => setAdditionalQuestions([...additionalQuestions, ''])}
+                        className="mb-4 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 font-medium flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>質問を追加</span>
+                      </button>
+
+                      {/* 実行ボタン */}
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          onClick={() => setShowAdditionalQuestionDialog(false)}
+                          className="bg-gray-300 text-gray-700 py-2 px-6 rounded-lg hover:bg-gray-400 font-medium"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setLoading(true);
+                              setShowAdditionalQuestionDialog(false);
+                              setProgress(0);
+                              setProgressMessage('追加インタビューを実行中...');
+
+                              const validQuestions = additionalQuestions.filter(q => q.trim());
+                              if (validQuestions.length === 0) {
+                                setError('有効な質問を入力してください');
+                                return;
+                              }
+
+                              const newResults: Record<string, InterviewResult[]> = {};
+                              const totalPersonas = selectedPersonas.length;
+
+                              for (let i = 0; i < selectedPersonas.length; i++) {
+                                setProgress(Math.round((i / totalPersonas) * 100));
+                                setProgressMessage(`ペルソナ ${i + 1}/${totalPersonas} の追加インタビュー中...`);
+
+                                const response = await apiClient.conductHypothesisInterview(i, validQuestions);
+                                newResults[response.persona_name] = response.interview_results;
+                              }
+
+                              setAdditionalInterviewResults(newResults);
+
+                              // personaSummariesを更新
+                              const updatedSummaries = personaSummaries.map(summary => ({
+                                ...summary,
+                                additionalInterview: [
+                                  ...(summary.additionalInterview || []),
+                                  ...(newResults[summary.personaName] || [])
+                                ]
+                              }));
+                              setPersonaSummaries(updatedSummaries);
+
+                              setProgress(100);
+                              setProgressMessage('追加インタビュー完了');
+                              alert('追加インタビューが完了しました');
+                            } catch (err: any) {
+                              setError('追加インタビューの実行に失敗しました: ' + (err.response?.data?.detail || err.message));
+                            } finally {
+                              setLoading(false);
+                              setProgress(0);
+                              setProgressMessage('');
+                            }
+                          }}
+                          disabled={loading || additionalQuestions.every(q => !q.trim())}
+                          className="bg-green-600 text-white py-2 px-6 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                        >
+                          インタビューを実行
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* アクションボタン */}
+                <div className="flex justify-center space-x-4 mt-8">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await apiClient.saveInterviewHistory();
+                        alert('結果を履歴に保存しました');
+                        
+                        const historyResponse = await apiClient.getInterviewHistory();
+                        setInterviewHistory(historyResponse.history);
+                      } catch (err: any) {
+                        setError('履歴の保存に失敗しました: ' + (err.response?.data?.detail || err.message));
+                      }
+                    }}
+                    className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    結果を保存
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStep(0);
+                      setTopic('');
+                      setProductServices([{
+                        id: '1',
+                        name: '',
+                        target_audience: '',
+                        benefits: '',
+                        benefit_reason: '',
+                        basic_info: ''
+                      }]);
+                      setCompetitors([]);
+                      setPersonas([]);
+                      setSelectedPersonas([]);
+                      setQuestions([]);
+                      setInterviewResults({});
+                      setAnalysis('');
+                      setHypothesisData(null);
+                      setHypothesisInterviewResults({});
+                      setFinalAnalysis('');
+                      setPersonaSummaries([]);
+                      setAdditionalQuestions(['', '', '', '', '']);
+                    }}
+                    className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    新しいインタビューを開始
+                  </button>
+                  <button
+                    onClick={() => {
+                      const element = document.createElement('a');
+                      
+                      let productsInfo = '';
+                      productServices.forEach((product, index) => {
+                        productsInfo += `
+                        商品・サービス ${index + 1}: ${product.name}
+                        ターゲット: ${product.target_audience}
+                        ベネフィット: ${product.benefits}
+                        根拠: ${product.benefit_reason}
+                        基本情報: ${product.basic_info}
+                        `;
+                      });
+                      
+                      let competitorsInfo = '';
+                      if (competitors.length > 0) {
+                        competitorsInfo = '\n=== 競合情報 ===\n';
+                        competitors.forEach((competitor, index) => {
+                          competitorsInfo += `
+                          競合 ${index + 1}: ${competitor.name}
+                          説明: ${competitor.description}
+                          価格: ${competitor.price || 'N/A'}
+                          特徴: ${competitor.features || 'N/A'}
+                          `;
+                        });
+                      }
+                      
+                      const file = new Blob([
+                        `tames interview - 最終レポート\n\n`,
+                        `トピック: ${topic}\n\n`,
+                        `=== 商品・サービス情報 ===\n${productsInfo}\n`,
+                        competitorsInfo,
+                        `\n=== 最終マーケティング戦略分析 ===\n${finalAnalysis}\n\n`
+                      ], { type: 'text/plain' });
+                      element.href = URL.createObjectURL(file);
+                      element.download = `マーケティング分析レポート_${topic}_${new Date().toISOString().split('T')[0]}.txt`;
+                      document.body.appendChild(element);
+                      element.click();
+                      document.body.removeChild(element);
+                    }}
+                    className="bg-gray-600 text-white py-3 px-8 rounded-lg hover:bg-gray-700 font-medium"
+                  >
+                    レポートをダウンロード
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-8">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">分析結果</h2>
+                  <p className="text-gray-600">
+                    インタビュー結果と分析を確認できます
+                  </p>
+                </div>
+                
+                <InterviewResults 
+                  results={interviewResults} 
+                  personas={selectedPersonas}
+                />
+                
+                <div className="flex justify-center">
+                  <button
+                    onClick={handleGenerateAnalysis}
+                    disabled={loading}
+                    className="bg-purple-600 text-white py-3 px-8 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {loading ? <LoadingSpinner size="sm" text="分析を生成中..." /> : '初回インサイト分析を生成'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -1155,7 +1297,7 @@ export default function Home() {
         <div className="text-center">
           <LoadingSpinner size="lg" />
           <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-2">
-            マーケティングインタビューシステム
+            tames interview
           </h1>
           <p className="text-gray-600">
             {connectionStatus === 'connecting' ? 'サーバーに接続中...' : 'アプリケーションを初期化中...'}

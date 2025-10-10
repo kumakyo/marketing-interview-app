@@ -141,23 +141,47 @@ def to_text(text):
     text = text.replace('•', ' *')
     return textwrap.dedent(text)
 
-def generate_text(prompt, model_name="models/gemini-2.0-flash-lite", temperature=0.8):
-    """指定されたプロンプトと設定でテキストを生成する関数"""
-    try:
-        model = genai.GenerativeModel(model_name=model_name)
-        response = model.generate_content(
-            prompt, 
-            generation_config=genai.types.GenerationConfig(temperature=temperature)
-        )
-        
-        current_session["total_input_chars"] += len(prompt)
-        if response.text:
-            current_session["total_output_chars"] += len(response.text)
-        
-        return response.text
-    except Exception as e:
-        logger.error(f"テキスト生成中にエラーが発生しました: {e}")
-        raise HTTPException(status_code=500, detail=f"テキスト生成エラー: {e}")
+def generate_text(prompt, model_name="models/gemini-2.5-flash-lite", temperature=0.8, max_retries=3):
+    """指定されたプロンプトと設定でテキストを生成する関数（リトライ機能付き）"""
+    retry_count = 0
+    last_error = None
+    
+    while retry_count < max_retries:
+        try:
+            model = genai.GenerativeModel(model_name=model_name)
+            response = model.generate_content(
+                prompt, 
+                generation_config=genai.types.GenerationConfig(temperature=temperature)
+            )
+            
+            current_session["total_input_chars"] += len(prompt)
+            if response.text:
+                current_session["total_output_chars"] += len(response.text)
+            
+            return response.text
+        except Exception as e:
+            last_error = e
+            error_message = str(e)
+            
+            # APIオーバーロードまたは一時的なエラーの場合はリトライ
+            if ("overloaded" in error_message.lower() or 
+                "503" in error_message or 
+                "504" in error_message or
+                "unavailable" in error_message.lower() or
+                "timeout" in error_message.lower()):
+                retry_count += 1
+                wait_time = retry_count * 2  # 2秒、4秒、6秒と待機時間を増やす
+                logger.warning(f"API一時エラー（リトライ {retry_count}/{max_retries}）: {e}。{wait_time}秒待機中...")
+                time.sleep(wait_time)
+                continue
+            else:
+                # その他のエラーは即座に例外を投げる
+                logger.error(f"テキスト生成中にエラーが発生しました: {e}")
+                raise HTTPException(status_code=500, detail=f"テキスト生成エラー: {e}")
+    
+    # 最大リトライ回数に達した場合
+    logger.error(f"テキスト生成が最大リトライ回数（{max_retries}）に達しました: {last_error}")
+    raise HTTPException(status_code=503, detail=f"APIが過負荷状態です。しばらく待ってから再試行してください。")
 
 def parse_personas(personas_text):
     """ペルソナテキストを解析する関数"""
@@ -376,6 +400,9 @@ async def generate_personas(request: PersonaGenerationRequest):
             "raw_text": personas_text
         }
     
+    except HTTPException:
+        # HTTPExceptionはそのまま再raiseする
+        raise
     except Exception as e:
         logger.error(f"ペルソナ生成エラー: {e}")
         raise HTTPException(status_code=500, detail=f"ペルソナ生成に失敗しました: {e}")
@@ -394,7 +421,7 @@ async def select_personas(request: PersonaSelectionRequest):
         current_session["selected_personas"] = selected_personas
         
         # 各ペルソナのチャットセッションを初期化
-        model = genai.GenerativeModel('models/gemini-2.0-flash-lite')
+        model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
         
         for persona in selected_personas:
             # 商品・サービス情報と競合情報を含むプロンプト
@@ -1171,47 +1198,72 @@ async def generate_final_analysis():
                     products_context += "\n"
         
         final_analysis_prompt = f"""
-        あなたは経験豊富なCMO（最高マーケティング責任者）です。
-        以下のすべての情報（商品・サービス情報、競合情報、ペルソナと全インタビューの結果）を統合し、最終的なマーケティング戦略を策定してください。
+        あなたはトップクラスのマーケティングアナリストです。
+        以下の商品・サービス情報と3名のペルソナのインタビュー要約を深く読み解き、詳細なインサイト分析レポートを作成してください。
         
         {products_context}
         
         全インタビュー要約:
         {all_final_summaries}
         
-        以下の形式で、各項目を「## 」で始まる見出しとして出力してください：
+        【重要】各分析項目では、必ず具体的な発言内容を根拠として引用し、「〜という発言があることから〜と読み取れる」という形式で記載してください。
+        
+        【レポート形式】（各項目は詳細に4-5行でまとめてください）
+        
+        ## 1. ベネフィットへの共感度合い
+        各ペルソナのベネフィットに対する反応を分析し、具体的な発言を根拠として共感度を評価してください。
+        どのベネフィットが最も響いているか、逆に響いていないベネフィットは何かを明確にしてください。
 
-        ## 1. 商品・サービスの市場適合性
-        対象商品・サービスが市場やペルソナのニーズにどの程度適合しているかを評価します。
-        具体的なインタビュー発言を根拠として引用し、市場適合性を分析してください。
+        ## 2. 購買意欲
+        購入意向の強さとその理由を分析し、購入を促進する要因と阻害する要因を特定してください。
+        各ペルソナの購買意欲レベルを具体的な発言を根拠として評価してください。
 
-        ## 2. 競合優位性の分析
-        競合商品・サービスとの比較から見えてくる差別化ポイントや優位性を分析します。
-        ペルソナの競合に対する反応を根拠として示してください。
+        ## 3. 購入しない理由の抽出
+        ネガティブ要因や購入阻害要因を詳細に分析し、具体的な懸念点や不安要素を整理してください。
+        価格、機能、信頼性、利便性など、カテゴリ別に阻害要因を分類してください。
 
-        ## 3. ターゲット顧客の精度
-        設定したターゲット顧客とペルソナの反応から、ターゲティングの精度を評価します。
-        想定ターゲットと実際の反応のギャップを具体的に分析してください。
+        ## 4. 回答の裏側にあるインサイトの抽出
+        表面的な回答の背後にある本音や価値観を分析し、隠れたニーズや動機を発見してください。
+        言葉に表れない心理的要因や潜在的な課題を具体的に指摘してください。
 
-        ## 4. ベネフィット訴求の効果
-        提示したベネフィットの受容性と説得力を評価し、改善点を提案します。
-        ペルソナの具体的な反応を根拠として示してください。
+        ## 5. 対象商品・サービスに対する顧客インサイト
+        各ペルソナの回答から得られた重要な洞察をまとめ、発言内容を根拠として示してください。
+        顧客の真のニーズと商品・サービスの価値提案のマッチング度を評価してください。
 
-        ## 5. 価格戦略の妥当性
-        価格設定に対するペルソナの反応から、価格戦略の妥当性を評価します。
-        価格に関する具体的な発言を引用して分析してください。
+        ## 6. 競合商品との比較分析
+        競合商品・サービスに対する反応と対象商品の差別化ポイントを分析してください。
+        具体的な比較発言を引用し、競合優位性を明確にしてください。
 
-        ## 6. 推奨マーケティング戦略
-        上記分析に基づく具体的なマーケティング戦略とアクションプランを提案します。
-        各ペルソナセグメントに対する具体的なアプローチ方法を含めてください。
+        ## 7. ターゲット顧客の検証
+        想定ターゲットと実際のペルソナの反応を比較し、ターゲット設定の妥当性を評価してください。
+        どのペルソナが最も有望な顧客層かを具体的に分析してください。
 
-        ## 7. リスクと課題
-        予想される課題やリスクとその対策を提案します。
-        インタビューから見えてきた懸念点や阻害要因を具体的に挙げてください。
+        ## 8. 価格感・購入意向
+        価格設定に対する反応と購入意向を分析し、価格に関する具体的な発言を根拠として提示してください。
+        適正価格帯と価格感度を詳細に評価してください。
 
-        ## 8. 次のステップ
-        今後実施すべき具体的な施策やさらなる調査項目を提案します。
-        優先順位と実施タイムラインを含めて具体的に提案してください。
+        ## 9. 顧客セグメント別ヒートマップ（4象限分析）
+        以下の軸で各ペルソナと商品・サービスの関係を分析し、図示してください：
+        - 縦軸：購買意欲（高い/低い）
+        - 横軸：ベネフィット共感度（高い/低い）
+
+        ```
+        購買意欲高
+        　　│
+        　　│ [高意欲・高共感]     [高意欲・低共感]
+        　　│   {{ペルソナ名}}         {{ペルソナ名}}
+        ────┼────────────────────────
+        　　│ [低意欲・高共感]     [低意欲・低共感]
+        　　│   {{ペルソナ名}}         {{ペルソナ名}}
+        　　│
+        購買意欲低   共感度低        共感度高
+        ```
+
+        各象限のペルソナに対する具体的なアプローチ戦略を提案してください。
+
+        ## 10. マーケティング戦略の示唆
+        この分析結果から、具体的なマーケティング戦略を提案してください。
+        各象限のペルソナに対する具体的なアプローチ方法、メッセージング、チャネル戦略を記載してください。
         """
         
         final_analysis_result = generate_text(final_analysis_prompt)
@@ -1409,6 +1461,77 @@ async def get_interview_history_detail(history_id: str):
     except Exception as e:
         logger.error(f"履歴詳細取得エラー: {e}")
         raise HTTPException(status_code=500, detail=f"履歴詳細の取得に失敗しました: {e}")
+
+@app.post("/api/generate-interview-summary")
+async def generate_interview_summary():
+    """各ペルソナのインタビュー結果からサマリを生成するエンドポイント"""
+    try:
+        if not current_session["selected_personas"]:
+            raise HTTPException(status_code=400, detail="インタビューデータがありません")
+        
+        summaries = []
+        
+        for persona in current_session["selected_personas"]:
+            session = current_session["interview_sessions"].get(persona.name)
+            if not session or not session.get("history"):
+                continue
+            
+            # インタビュー内容を要約
+            interview_content = ""
+            for result in session["history"]:
+                interview_content += f"質問: {result['question']}\n"
+                interview_content += f"回答: {result['main_answer']}\n"
+                for follow_up in result.get('follow_ups', []):
+                    interview_content += f"更問: {follow_up['question']}\n"
+                    interview_content += f"更問回答: {follow_up['answer']}\n"
+                interview_content += "\n"
+            
+            # LLMでサマリを生成
+            summary_prompt = f"""
+            以下のペルソナへのインタビュー内容を読み、2つの観点からサマリを作成してください：
+            
+            1. **主な発見**: このペルソナのインタビューから得られた最も重要な気づきや発見を4-5行で詳細に記述
+            2. **主な示唆**: この発見から導かれるマーケティング上の示唆を4-5行で具体的に記述
+            
+            ペルソナ情報:
+            {persona.raw_text}
+            
+            インタビュー内容:
+            {interview_content}
+            
+            出力形式:
+            【主な発見】
+            [発見内容を4-5行で詳細に記述]
+            
+            【主な示唆】
+            [示唆内容を4-5行で具体的に記述]
+            """
+            
+            summary_text = generate_text(summary_prompt, temperature=0.6)
+            
+            # サマリをパース
+            main_findings = ""
+            main_implications = ""
+            
+            if "【主な発見】" in summary_text:
+                findings_part = summary_text.split("【主な発見】")[1]
+                if "【主な示唆】" in findings_part:
+                    main_findings = findings_part.split("【主な示唆】")[0].strip()
+                    main_implications = findings_part.split("【主な示唆】")[1].strip()
+                else:
+                    main_findings = findings_part.strip()
+            
+            summaries.append({
+                "persona_name": persona.name,
+                "main_findings": main_findings,
+                "main_implications": main_implications
+            })
+        
+        return {"summaries": summaries}
+    
+    except Exception as e:
+        logger.error(f"インタビューサマリ生成エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"インタビューサマリの生成に失敗しました: {e}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -10,11 +10,26 @@ interface ChatPersonaCardProps {
 const ChatPersonaCard: React.FC<ChatPersonaCardProps> = ({ persona, isSelected, onSelect }) => {
   const [showDetails, setShowDetails] = useState(false);
 
-  // ペルソナの顔画像生成（一般的な日本人風）
-  const getAvatarUrl = (name: string) => {
-    // DiceBear APIを使用してアバター生成（一般的な見た目に設定）
+  // ペルソナの顔画像生成（性別に基づいた適切なアイコン）
+  const getAvatarUrl = (name: string, gender?: string) => {
     const seed = encodeURIComponent(name);
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9&skinColor=fdbcb4,edb98a&hairColor=2c1b18,724133,a55728&eyesColor=6b4423,3e2723&clothingColor=262e33,65c9ff,5199e4&facialHairProbability=0&accessoriesProbability=0&hatProbability=0&eyebrowProbability=100&mouthProbability=100`;
+    
+    // 性別情報を取得（detailsから）
+    const genderLower = (gender || persona.details?.性別 || '').toLowerCase();
+    const isFemale = genderLower.includes('女') || genderLower.includes('female');
+    const isMale = genderLower.includes('男') || genderLower.includes('male');
+    
+    // 性別に応じてアバタースタイルを設定
+    if (isFemale) {
+      // 女性用のアバター設定
+      return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9&skinColor=fdbcb4,edb98a,f0d5be&hairColor=2c1b18,724133,a55728,4a312c&eyesColor=6b4423,3e2723,896c56&clothingColor=262e33,3c4f5c,65c9ff,5199e4,929598&facialHairProbability=0&accessoriesProbability=30&hatProbability=0&eyebrowProbability=100&mouthProbability=100&mouth=smile,default,serious&eyes=default,happy,wink`;
+    } else if (isMale) {
+      // 男性用のアバター設定
+      return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9&skinColor=fdbcb4,edb98a,f0d5be,ae5d29&hairColor=2c1b18,724133,a55728,4a312c,b58143&eyesColor=6b4423,3e2723,896c56&clothingColor=262e33,3c4f5c,65c9ff,5199e4,929598&facialHairProbability=40&accessoriesProbability=20&hatProbability=0&eyebrowProbability=100&mouthProbability=100&mouth=smile,default,serious&eyes=default,happy`;
+    } else {
+      // 性別不明の場合は中性的なアバター
+      return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9&skinColor=fdbcb4,edb98a,f0d5be&hairColor=2c1b18,724133,a55728,4a312c&eyesColor=6b4423,3e2723,896c56&clothingColor=262e33,3c4f5c,65c9ff,5199e4,929598&facialHairProbability=0&accessoriesProbability=20&hatProbability=0&eyebrowProbability=100&mouthProbability=100&mouth=smile,default&eyes=default,happy`;
+    }
   };
 
   return (
