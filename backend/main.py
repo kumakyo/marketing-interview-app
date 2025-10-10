@@ -1009,25 +1009,29 @@ async def generate_hypothesis():
         # 仮説と追加質問を生成
         hypothesis_prompt = f"""
         あなたは戦略プランナーです。
-        先ほどのインサイト分析レポートを基に、次のアクションに繋がる「マーケティング仮説」と、その仮説を検証するための「追加インタビュー質問」を作成してください。
+        先ほどのインサイト分析レポートを基に、さらに深掘りするための追加質問を作成してください。
         
         分析レポート:
         {initial_analysis_result}
         
-        【出力形式】
-        **マーケティング仮説**:
-        - [仮説1]
-        - [仮説2]
-        - [仮説3]
-
+        【重要な指示】
+        - 質問文は直接的で自然な形で生成してください
+        - 「仮説」「検証」などの分析的な文言は一切使用しないでください
+        - 各質問は独立した質問として生成してください
+        
         **追加インタビュー質問**:
-        - [仮説を検証するための質問1]
-        - [仮説を検証するための質問2]
-        - [仮説を検証するための質問3]
-        - [仮説を検証するための質問4]
-        - [仮説を検証するための質問5]
-
-        ※追加質問は、仮説検証に特化し、具体的で単一の論点に絞った質問を5個作成してください。
+        - [質問内容1]
+        - [質問内容2]
+        - [質問内容3]
+        - [質問内容4]
+        - [質問内容5]
+        
+        質問は以下の観点から生成してください：
+        - より具体的な利用シーンや状況について
+        - 競合商品との比較や選択理由について
+        - 価格感や購入決定要因について
+        - 潜在的な不安や懸念事項について
+        - 推奨意向や口コミ行動について
         """
         
         hypothesis_and_questions_text = generate_text(hypothesis_prompt)
@@ -1044,15 +1048,15 @@ async def generate_hypothesis():
 
         if not extracted_new_questions:
             extracted_new_questions = [
-                "これまでの仮説について、他に何か深掘りしたい点はありますか？",
+                "これまでの内容について、他に何か深掘りしたい点はありますか？",
                 "この商品・サービスに対する期待値について教えてください。",
                 "理想的な体験とはどのようなものでしょうか？",
                 "現在感じている不満や改善点はありますか？",
                 "将来的にどのような変化を期待しますか？"
             ]
         
-        # 仮説と質問をセッションに保存
-        current_session["hypothesis_and_questions"] = hypothesis_and_questions_text
+        # 質問をセッションに保存
+        current_session["additional_questions"] = hypothesis_and_questions_text
         
         return {
             "summaries": summaries,
@@ -1067,7 +1071,7 @@ async def generate_hypothesis():
 
 @app.post("/api/conduct-hypothesis-interview")
 async def conduct_hypothesis_interview(request: InterviewRequest):
-    """仮説検証のための追加インタビューを実行するエンドポイント"""
+    """追加インタビューを実行するエンドポイント"""
     try:
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="ペルソナが選択されていません")
@@ -1093,7 +1097,7 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
             for follow_up_num in range(1, 3):
                 follow_up_prompt = f"""
                 あなたは戦略的なインタビュアーです。これまでの{persona.name}さんとの会話履歴を読み、
-                提示された仮説を検証するために、直前の回答について、より具体的で洞察的な情報を引き出すような、
+                より深い洞察を得るために、直前の回答について、より具体的で洞察的な情報を引き出すような、
                 1つの質問を作成してください。
                 質問は「〇〇について、どのように感じますか？」のような対話形式でお願いします。
                 
@@ -1124,12 +1128,12 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
         return {
             "persona_name": persona.name,
             "interview_results": interview_results,
-            "message": "仮説検証インタビューが完了しました"
+            "message": "追加インタビューが完了しました"
         }
     
     except Exception as e:
-        logger.error(f"仮説検証インタビュー実行エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"仮説検証インタビューの実行に失敗しました: {e}")
+        logger.error(f"追加インタビュー実行エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"追加インタビューの実行に失敗しました: {e}")
 
 @app.post("/api/generate-final-analysis")
 async def generate_final_analysis():
@@ -1158,7 +1162,7 @@ async def generate_final_analysis():
                 interview_content += "\n"
             
             summary_prompt = f"""
-            以下のペルソナへの全インタビュー内容（初回+仮説検証）を読み、重要なポイントを統合的に要約してください。
+            以下のペルソナへの全インタビュー内容（初回+追加質問）を読み、重要なポイントを統合的に要約してください。
             
             ペルソナ情報:
             {persona.raw_text}

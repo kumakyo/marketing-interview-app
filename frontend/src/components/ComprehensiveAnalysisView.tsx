@@ -111,16 +111,18 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
             </h3>
             
             {/* LINE風インタビュー表示 */}
-            <div className="bg-white border-2 border-blue-200 rounded-lg p-6">
-              <h4 className="text-lg font-semibold text-blue-900 mb-4">💬 インタビュー会話</h4>
-              <ChatStyleInterview
-                personaName={personaSummaries[activeTab].personaName}
-                allInterviews={[
-                  ...personaSummaries[activeTab].initialInterview,
-                  ...(personaSummaries[activeTab].additionalInterview || [])
-                ]}
-                personaDetails={personaSummaries[activeTab].personaDetails}
-              />
+            <div className="bg-white border-2 border-blue-200 rounded-lg p-8">
+              <h4 className="text-lg font-semibold text-blue-900 mb-6">💬 インタビュー会話</h4>
+              <div className="h-[600px]">
+                <ChatStyleInterview
+                  personaName={personaSummaries[activeTab].personaName}
+                  allInterviews={[
+                    ...personaSummaries[activeTab].initialInterview,
+                    ...(personaSummaries[activeTab].additionalInterview || [])
+                  ]}
+                  personaDetails={personaSummaries[activeTab].personaDetails}
+                />
+              </div>
             </div>
           </div>
         )}
