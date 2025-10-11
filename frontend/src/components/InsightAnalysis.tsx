@@ -19,18 +19,29 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
     let currentSection: { title: string; content: string; id: string } | null = null;
 
     lines.forEach((line) => {
-      // ## で始まる見出しを検出
-      if (line.startsWith('## ')) {
+      // ## で始まる見出し、または「1.」「2.」などの番号付き見出しを検出
+      const markdownHeading = line.match(/^##\s+(.+)$/);
+      const numberedHeading = line.match(/^(\d+)\.\s+(.+)$/);
+      
+      if (markdownHeading || numberedHeading) {
         if (currentSection && currentSection.content.trim()) {
           sections.push(currentSection);
         }
-        const title = line.replace('## ', '').trim();
+        
+        let title = '';
+        if (markdownHeading) {
+          title = markdownHeading[1].trim();
+        } else if (numberedHeading) {
+          // 番号付き見出しの場合、番号も含める
+          title = `${numberedHeading[1]}. ${numberedHeading[2].trim()}`;
+        }
+        
         const id = title.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, '-');
         currentSection = { title, content: '', id };
       } else if (currentSection) {
         currentSection.content += line + '\n';
-      } else if (line.trim()) {
-        // 最初のセクション（見出しなし）
+      } else if (line.trim() && !line.includes('詳細インサイト分析レポート')) {
+        // 最初のセクション（見出しなし、ただし「詳細インサイト分析レポート」は除外）
         if (!currentSection) {
           currentSection = { title: '概要', content: line + '\n', id: 'overview' };
         } else {
@@ -43,7 +54,10 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
       sections.push(currentSection);
     }
 
-    return sections.filter(section => section.content.trim().length > 0);
+    return sections.filter(section => 
+      section.content.trim().length > 0 && 
+      !section.title.includes('詳細インサイト分析レポート')
+    );
   };
 
   const sections = parseAnalysis(analysis);

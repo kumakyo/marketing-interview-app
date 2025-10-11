@@ -45,3 +45,5 @@ logs/
 # Output
 output/
 *.txt
+!requirements.txt
+!**/requirements.txt

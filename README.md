@@ -62,14 +62,38 @@ git clone <repository-url>
 cd marketing-interview-app
 ```
 
-#### 2. 環境変数の設定
+#### 2. 自動セットアップ（推奨）
+
+```bash
+# セットアップスクリプトを実行
+./setup.sh
+```
+
+このスクリプトは以下を自動的に実行します：
+- .envファイルの作成（env.exampleからコピー）
+- Pythonバックエンドの依存関係インストール
+- Node.jsフロントエンドの依存関係インストール
+
+**注意**: セットアップ後、`.env`ファイルを編集してGemini APIキーを設定してください。
+
+#### 2-B. 手動セットアップ
 
 ```bash
 # .envファイルを作成
 cp env.example .env
 
-# .envファイルを編集してGoogle API キーを設定
+# .envファイルを編集してGemini API キーを設定
 nano .env
+
+# バックエンドの依存関係をインストール
+cd backend
+pip3 install -r requirements.txt
+cd ..
+
+# フロントエンドの依存関係をインストール
+cd frontend
+npm install
+cd ..
 ```
 
 #### 3. アプリケーションを起動

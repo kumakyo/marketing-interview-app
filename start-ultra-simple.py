@@ -15,6 +15,33 @@ def print_status(message, emoji="🔧"):
     """ステータスメッセージを出力"""
     print(f"{emoji} {message}")
 
+def check_env_file():
+    """環境変数ファイルをチェック"""
+    env_file = Path(".env")
+    env_example = Path("env.example")
+    
+    if not env_file.exists():
+        print_status("⚠️ .envファイルが見つかりません", "⚠️")
+        if env_example.exists():
+            print_status(".envファイルを作成中...", "📝")
+            import shutil
+            shutil.copy(env_example, env_file)
+            print_status("✅ .envファイルを作成しました")
+            print_status("⚠️  .envファイルにGemini APIキーを設定してください！", "⚠️")
+            print_status("   編集後、再度このスクリプトを実行してください", "ℹ️")
+            return False
+    
+    # APIキーのチェック
+    with open(env_file, 'r') as f:
+        content = f.read()
+        if 'your_gemini_api_key_here' in content or 'GOOGLE_API_KEY=' not in content:
+            print_status("⚠️ Gemini APIキーが設定されていません", "⚠️")
+            print_status("   .envファイルを開いて、GOOGLE_API_KEYを設定してください", "ℹ️")
+            print_status("   例: GOOGLE_API_KEY=AIzaSy...", "ℹ️")
+            return False
+    
+    return True
+
 def cleanup_ports():
     """ポートをクリーンアップ"""
     print_status("既存のプロセスをクリーンアップ中...", "🧹")
@@ -56,6 +83,11 @@ def main():
     """メイン関数"""
     print_status("tames interview を起動中...", "🚀")
     print("=" * 50)
+    
+    # 環境変数ファイルのチェック
+    if not check_env_file():
+        print_status("❌ セットアップが完了していません", "💥")
+        return
     
     # プロジェクトルートに移動
     if not Path("backend").exists() or not Path("frontend").exists():
@@ -128,8 +160,17 @@ def main():
     print()
     print_status("📱 アクセス先:", "🔧")
     print_status("   http://localhost:3001", "  🔗")
-    print_status("   http://10.146.0.2:3001", "  🔗")
-    print_status("   http://35.243.121.35:3001", "  🔗")
+    
+    # ローカルIPアドレスを取得
+    try:
+        import socket
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        if local_ip and local_ip != "127.0.0.1":
+            print_status(f"   http://{local_ip}:3001", "  🔗")
+    except:
+        pass
+    
     print()
     print_status("📚 API文書:", "🔧")
     print_status("   http://localhost:8000/docs", "  📖")

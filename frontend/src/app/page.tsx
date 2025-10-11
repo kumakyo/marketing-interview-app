@@ -45,7 +45,7 @@ export default function Home() {
 
   // ステップ定義
   const steps = [
-    { id: 0, title: "商品・ペルソナ設定", description: "商品情報とペルソナ設定" },
+    { id: 0, title: "プロジェクト設定", description: "商品情報とペルソナ設定" },
     { id: 1, title: "ペルソナ選択", description: "インタビューするペルソナを選択" },
     { id: 2, title: "質問内容作成", description: "インタビュー質問を作成" },
     { id: 3, title: "分析結果", description: "インタビューと分析結果" }
