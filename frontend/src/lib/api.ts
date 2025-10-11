@@ -6,13 +6,19 @@ const getApiBaseUrl = () => {
   // ブラウザ環境でのみ実行
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
     
-    // ローカルホストの場合はローカルAPI、それ以外は外部グローバルIPのAPIを使用
+    // 環境変数が設定されている場合はそれを優先
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+    
+    // ローカルホストの場合
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      return 'http://localhost:8000';
     } else {
-      // 外部アクセスの場合は外部グローバルIPのAPIを使用
-      return 'http://34.180.94.249:8000';
+      // 外部アクセスの場合は同じホスト名でポート8000を使用
+      return `${protocol}//${hostname}:8000`;
     }
   }
   
@@ -27,7 +33,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 120000, // 2分のタイムアウト（LLM処理のため長めに設定）
+  timeout: 300000, // 5分のタイムアウト（LLM処理のため長めに設定）
+  withCredentials: false, // CORS対応
 });
 
 // デバッグ用: API接続情報をコンソールに出力
@@ -117,14 +124,25 @@ export const apiClient = {
   // API接続テスト（長めのタイムアウトを設定）
   testConnection: async (): Promise<{ status: string; message: string }> => {
     try {
-      const response = await api.get('/', { timeout: 30000 }); // 30秒のタイムアウト
+      const response = await api.get('/', { timeout: 60000 }); // 60秒のタイムアウト
       return { status: 'success', message: 'API接続成功' };
     } catch (error: any) {
       console.error('API接続エラー:', error);
+      console.error('エラー詳細:', {
+        code: error.code,
+        message: error.message,
+        response: error.response?.status,
+        baseURL: API_BASE_URL
+      });
+      
       if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        return { status: 'error', message: 'バックエンドサーバーに接続できません。サーバーが起動していることを確認してください。' };
+        return { status: 'error', message: `バックエンドサーバー(${API_BASE_URL})に接続できません。サーバーが起動していることを確認してください。` };
       } else if (error.timeout || error.code === 'ECONNABORTED') {
-        return { status: 'error', message: 'API接続がタイムアウトしました。ネットワーク接続を確認してください。' };
+        return { status: 'error', message: `API接続がタイムアウトしました(${API_BASE_URL})。ネットワーク接続を確認してください。` };
+      } else if (error.response) {
+        return { status: 'error', message: `APIエラー(${error.response.status}): ${error.message}` };
+      } else if (error.request) {
+        return { status: 'error', message: `ネットワークエラー: サーバー(${API_BASE_URL})に接続できません。ファイアウォールやネットワーク設定を確認してください。` };
       } else {
         return { status: 'error', message: `API接続エラー: ${error.message}` };
       }

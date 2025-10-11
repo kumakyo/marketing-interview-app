@@ -19,21 +19,20 @@ const InsightAnalysis: React.FC<InsightAnalysisProps> = ({
     let currentSection: { title: string; content: string; id: string } | null = null;
 
     lines.forEach((line) => {
-      // ## で始まる見出し、または「1.」「2.」などの番号付き見出しを検出
-      const markdownHeading = line.match(/^##\s+(.+)$/);
-      const numberedHeading = line.match(/^(\d+)\.\s+(.+)$/);
+      // ### で始まる見出し（3つのハッシュ）を優先的に検出
+      const markdownHeading3 = line.match(/^###\s+(.+)$/);
+      const markdownHeading2 = line.match(/^##\s+(.+)$/);
       
-      if (markdownHeading || numberedHeading) {
+      if (markdownHeading3 || markdownHeading2) {
         if (currentSection && currentSection.content.trim()) {
           sections.push(currentSection);
         }
         
         let title = '';
-        if (markdownHeading) {
-          title = markdownHeading[1].trim();
-        } else if (numberedHeading) {
-          // 番号付き見出しの場合、番号も含める
-          title = `${numberedHeading[1]}. ${numberedHeading[2].trim()}`;
+        if (markdownHeading3) {
+          title = markdownHeading3[1].trim();
+        } else if (markdownHeading2) {
+          title = markdownHeading2[1].trim();
         }
         
         const id = title.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, '-');
