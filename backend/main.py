@@ -84,7 +84,7 @@ class ProjectInfo(BaseModel):
 class PersonaGenerationRequest(BaseModel):
     project_info: ProjectInfo
     persona_count: int = 5  # デフォルト5人
-    persona_characteristics: Optional[str] = None  # ペルソナの特徴指定
+    persona_characteristics: Optional[str] = None  # インタビュー対象者の特徴指定
 
 class PersonaSelectionRequest(BaseModel):
     selected_indices: List[int]
@@ -111,6 +111,9 @@ class InterviewSession(BaseModel):
     chat_history: List[ChatMessage]
     summary: str
 
+class AnalysisTypeRequest(BaseModel):
+    analysis_types: List[str]  # ["target_analysis", "improvement_analysis"] の組み合わせ
+
 class HistoryRecord(BaseModel):
     id: str
     timestamp: datetime
@@ -129,7 +132,8 @@ current_session = {
     "total_output_chars": 0,
     "start_time": time.time(),
     "project_info": None,
-    "custom_questions": []
+    "custom_questions": [],
+    "analysis_types": []  # 選択された分析タイプ
 }
 
 # 履歴保存用（実際のプロダクションではデータベースを使用）
@@ -339,14 +343,14 @@ async def generate_personas(request: PersonaGenerationRequest):
         if request.persona_characteristics:
             characteristics_info = f"""
         
-        【ペルソナの特徴指定】
-        以下の特徴を考慮してペルソナを作成してください：
+        【インタビュー対象者の特徴指定】
+        以下の特徴を考慮してインタビュー対象者を作成してください：
         {request.persona_characteristics}
         """
 
         persona_prompt = f"""
         あなたはマーケティングの専門家です。
-        以下の商品・サービスと「{request.project_info.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ{request.persona_count}人のペルソナを作成してください。
+        以下の商品・サービスと「{request.project_info.topic}」に関するインタビューのための、多様な価値観とライフスタイルを持つ{request.persona_count}人のインタビュー対象者を作成してください。
         
         【対象商品・サービス情報】
         {products_info}
@@ -354,9 +358,9 @@ async def generate_personas(request: PersonaGenerationRequest):
         【競合情報】
         {competitors_info}{characteristics_info}
         
-        各ペルソナについて、以下の詳細を含めてください。厳密にこの形式で出力してください：
+        各インタビュー対象者について、以下の詳細を含めてください。厳密にこの形式で出力してください：
 
-        """ + "\n\n".join([f"""ペルソナ{i+1}: [具体的な名前]
+        """ + "\n\n".join([f"""インタビュー対象者{i+1}: [具体的な名前]
         年齢: [年齢]
         性別: [性別]
         職業: [職業]
@@ -368,9 +372,9 @@ async def generate_personas(request: PersonaGenerationRequest):
 
         注意点：
         - 具体的で現実的な名前を使用してください
-        - 上記の商品・サービス情報と「{request.project_info.topic}」に関連する多様な価値観を持つペルソナを作成してください
-        - 対象商品・サービスのターゲット顧客層を考慮してペルソナを作成してください
-        - 競合商品を知っている、または使用したことがあるペルソナも含めてください
+        - 上記の商品・サービス情報と「{request.project_info.topic}」に関連する多様な価値観を持つインタビュー対象者を作成してください
+        - 対象商品・サービスのターゲット顧客層を考慮してインタビュー対象者を作成してください
+        - 競合商品を知っている、または使用したことがあるインタビュー対象者も含めてください
         - アスタリスク（*）や箇条書き記号は使用しないでください
         - 各項目は簡潔に記述してください
         """
@@ -406,6 +410,19 @@ async def generate_personas(request: PersonaGenerationRequest):
     except Exception as e:
         logger.error(f"ペルソナ生成エラー: {e}")
         raise HTTPException(status_code=500, detail=f"ペルソナ生成に失敗しました: {e}")
+
+@app.post("/api/set-analysis-types")
+async def set_analysis_types(request: AnalysisTypeRequest):
+    """分析タイプを設定するエンドポイント"""
+    try:
+        current_session["analysis_types"] = request.analysis_types
+        return {
+            "analysis_types": request.analysis_types,
+            "message": "分析タイプが設定されました"
+        }
+    except Exception as e:
+        logger.error(f"分析タイプ設定エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"分析タイプの設定に失敗しました: {e}")
 
 @app.post("/api/select-personas")
 async def select_personas(request: PersonaSelectionRequest):
@@ -1136,6 +1153,152 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
         import traceback
         logger.error(f"詳細エラー: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"追加インタビューの実行に失敗しました: {str(e)}")
+
+@app.post("/api/generate-custom-final-analysis")
+async def generate_custom_final_analysis():
+    """選択された分析タイプに基づく最終分析を生成するエンドポイント"""
+    try:
+        if not current_session["selected_personas"]:
+            raise HTTPException(status_code=400, detail="インタビューデータがありません")
+        
+        analysis_types = current_session.get("analysis_types", [])
+        if not analysis_types:
+            raise HTTPException(status_code=400, detail="分析タイプが選択されていません")
+        
+        # 全インタビュー結果を要約
+        final_summaries = {}
+        for persona in current_session["selected_personas"]:
+            session = current_session["interview_sessions"][persona.name]
+            history = session["history"]
+            
+            if not history:
+                continue
+            
+            # インタビュー内容を要約
+            interview_content = ""
+            for result in history:
+                interview_content += f"質問: {result['question']}\n"
+                interview_content += f"回答: {result['main_answer']}\n"
+                for follow_up in result.get('follow_ups', []):
+                    interview_content += f"更問: {follow_up['question']}\n"
+                    interview_content += f"更問回答: {follow_up['answer']}\n"
+                interview_content += "\n"
+            
+            summary_prompt = f"""
+            以下のインタビュー対象者への全インタビュー内容を読み、重要なポイントを統合的に要約してください。
+            
+            インタビュー対象者情報:
+            {persona.raw_text}
+            
+            全インタビュー内容:
+            {interview_content}
+            """
+            
+            summary = generate_text(summary_prompt, temperature=0.5)
+            final_summaries[persona.name] = summary
+        
+        # 選択された分析タイプに基づく分析を生成
+        all_final_summaries = '\n\n'.join([f"--- {name}さんの要約 ---\n{summary}" for name, summary in final_summaries.items()])
+        
+        # 商品・サービス情報を最終分析に含める
+        project_info = current_session.get("project_info")
+        products_context = ""
+        if project_info:
+            products_context = "\n【対象商品・サービス情報】\n"
+            for product in project_info.products_services:
+                products_context += f"""
+                商品・サービス名: {product.name}
+                ターゲット顧客: {product.target_audience}
+                ベネフィット: {product.benefits}
+                ベネフィットの根拠: {product.benefit_reason}
+                基本情報: {product.basic_info}
+                """
+            
+            if project_info.competitors:
+                products_context += "\n【競合商品・サービス情報】\n"
+                for competitor in project_info.competitors:
+                    products_context += f"- {competitor.name}: {competitor.description}"
+                    if competitor.price:
+                        products_context += f" (価格: {competitor.price})"
+                    if competitor.features:
+                        products_context += f" (特徴: {competitor.features})"
+                    products_context += "\n"
+        
+        # 分析タイプに応じた分析を生成
+        analysis_results = {}
+        
+        if "target_analysis" in analysis_types:
+            target_analysis_prompt = f"""
+            あなたはトップクラスのマーケティングアナリストです。
+            以下の商品・サービス情報とインタビュー対象者のインタビュー要約を深く読み解き、
+            「商品/サービスが誰に刺さるか？なんで刺さるか？」の分析を行ってください。
+            
+            {products_context}
+            
+            全インタビュー要約:
+            {all_final_summaries}
+            
+            【重要】各分析項目では、必ず具体的な発言内容を根拠として引用し、「〜という発言があることから〜と読み取れる」という形式で記載してください。
+            
+            ### 1. このサービスは特に誰に刺さるか？
+            例）XX代女性の、こういう人。なぜなら、インタビュー対象者のxxx人が「ｘｘｘ」ってコメントをだしているから。などの理由も付与。
+            
+            ### 2. 刺さる価値は何か？
+            例）xxxという価値。理由も付与。
+            
+            ### 3. その価値をこの人たちに伝えるにはどうすればよいか？
+            例）インスタグラムでｘｘｘという広告をｘｘｘ円で出す。等、具体的手法をいくつか提示。
+            """
+            
+            target_analysis = generate_text(target_analysis_prompt)
+            analysis_results["target_analysis"] = target_analysis
+        
+        if "improvement_analysis" in analysis_types:
+            improvement_analysis_prompt = f"""
+            あなたはトップクラスのマーケティングアナリストです。
+            以下の商品・サービス情報とインタビュー対象者のインタビュー要約を深く読み解き、
+            「こういう人に刺さるようにするためには今の商品/サービスをどうしたらよいか？」の分析を行ってください。
+            
+            {products_context}
+            
+            全インタビュー要約:
+            {all_final_summaries}
+            
+            【重要】各分析項目では、必ず具体的な発言内容を根拠として引用し、「〜という発言があることから〜と読み取れる」という形式で記載してください。
+            
+            ### 1. マーケットイン視点：今の市場・顧客のどんな"未充足ニーズ"を満たすべきか？
+            
+            ### 2. 商品戦略視点：プロダクト/サービスをどう磨くか？
+            
+            ### 3. マーケティング戦略視点：どのように伝え、広げるか？
+            """
+            
+            improvement_analysis = generate_text(improvement_analysis_prompt)
+            analysis_results["improvement_analysis"] = improvement_analysis
+        
+        # コスト計算
+        end_time = time.time()
+        elapsed_time = end_time - current_session["start_time"]
+        estimated_cost = (current_session["total_input_chars"] * INPUT_TOKEN_PRICE) + (current_session["total_output_chars"] * OUTPUT_TOKEN_PRICE)
+        
+        # 分析結果をセッションに保存
+        current_session["custom_final_analysis"] = analysis_results
+        
+        return {
+            "final_summaries": final_summaries,
+            "analysis_results": analysis_results,
+            "analysis_types": analysis_types,
+            "stats": {
+                "elapsed_time": elapsed_time,
+                "input_chars": current_session["total_input_chars"],
+                "output_chars": current_session["total_output_chars"],
+                "estimated_cost": estimated_cost
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"カスタム最終分析生成エラー: {e}")
+        raise HTTPException(status_code=500, detail=f"カスタム最終分析の生成に失敗しました: {e}")
 
 @app.post("/api/generate-final-analysis")
 async def generate_final_analysis():

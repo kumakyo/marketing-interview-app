@@ -21,6 +21,8 @@ export default function Home() {
   const [productCount, setProductCount] = useState(1);
   const [personaCount, setPersonaCount] = useState(5);
   const [personaCharacteristics, setPersonaCharacteristics] = useState('');
+  const [selectedAnalysisTypes, setSelectedAnalysisTypes] = useState<string[]>([]);
+  const [interviewCount, setInterviewCount] = useState(3);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [selectedPersonas, setSelectedPersonas] = useState<number[]>([]);
   const [questions, setQuestions] = useState<string[]>([]);
@@ -30,6 +32,7 @@ export default function Home() {
   const [hypothesisInterviewResults, setHypothesisInterviewResults] = useState<Record<string, InterviewResult[]>>({});
   const [finalAnalysis, setFinalAnalysis] = useState<string>('');
   const [finalStats, setFinalStats] = useState<any>(null);
+  const [customAnalysisResults, setCustomAnalysisResults] = useState<any>(null);
   const [loading, setLoading] = useState(true); // 初期状態でローディング
   const [error, setError] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<string>('connecting');
@@ -45,10 +48,11 @@ export default function Home() {
 
   // ステップ定義
   const steps = [
-    { id: 0, title: "プロジェクト設定", description: "商品情報とペルソナ設定" },
-    { id: 1, title: "ペルソナ選択", description: "インタビューするペルソナを選択" },
+    { id: 0, title: "プロジェクト設定", description: "商品情報とインタビュー対象者設定" },
+    { id: 1, title: "インタビュー対象者選択", description: "インタビューする対象者を選択" },
     { id: 2, title: "質問内容作成", description: "インタビュー質問を作成" },
-    { id: 3, title: "分析結果", description: "インタビューと分析結果" }
+    { id: 3, title: "分析タイプ選択", description: "実行する分析タイプを選択" },
+    { id: 4, title: "分析結果", description: "インタビューと分析結果" }
   ];
 
   // ステップ進行状況表示コンポーネント
@@ -206,7 +210,7 @@ export default function Home() {
     setSelectedPersonas(prev => {
       if (prev.includes(personaId)) {
         return prev.filter(id => id !== personaId);
-      } else if (prev.length < 3) {
+      } else if (prev.length < interviewCount) {
         return [...prev, personaId];
       }
       return prev;
@@ -214,8 +218,8 @@ export default function Home() {
   };
 
   const handleStartInterview = async () => {
-    if (selectedPersonas.length !== 3) {
-      setError('3つのペルソナを選択してください');
+    if (selectedPersonas.length !== interviewCount) {
+      setError(`${interviewCount}人のインタビュー対象者を選択してください`);
       return;
     }
 
@@ -239,7 +243,34 @@ export default function Home() {
       setProgressMessage('準備完了');
       setStep(2);
     } catch (err: any) {
-      setError('ペルソナの選択に失敗しました: ' + (err.response?.data?.detail || err.message));
+      setError('インタビュー対象者の選択に失敗しました: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setLoading(false);
+      setProgress(0);
+      setProgressMessage('');
+    }
+  };
+
+  const handleAnalysisTypeSelection = async () => {
+    if (selectedAnalysisTypes.length === 0) {
+      setError('分析タイプを選択してください');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setProgress(0);
+    setProgressMessage('分析タイプを設定中...');
+
+    try {
+      setProgress(50);
+      await apiClient.setAnalysisTypes(selectedAnalysisTypes);
+      
+      setProgress(100);
+      setProgressMessage('設定完了');
+      setStep(4);
+    } catch (err: any) {
+      setError('分析タイプの設定に失敗しました: ' + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
       setProgress(0);
@@ -350,11 +381,11 @@ export default function Home() {
       setHypothesisInterviewResults(hypothesisResults);
       setProgress(80);
       
-      // ステップ6: 最終分析を生成
-      setProgressMessage('最終マーケティング戦略分析を生成中...');
-      const finalResponse = await apiClient.generateFinalAnalysis();
-      setFinalAnalysis(finalResponse.final_analysis);
-      setFinalStats(finalResponse.stats);
+      // ステップ6: カスタム最終分析を生成
+      setProgressMessage('選択された分析タイプに基づく分析を生成中...');
+      const customFinalResponse = await apiClient.generateCustomFinalAnalysis();
+      setCustomAnalysisResults(customFinalResponse);
+      setFinalStats(customFinalResponse.stats);
       setProgress(90);
       
       // ステップ7: 統合サマリを作成
@@ -755,13 +786,13 @@ export default function Home() {
               )}
             </div>
 
-            {/* ペルソナ生成設定 */}
+            {/* インタビュー対象者生成設定 */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-              <h3 className="font-semibold text-gray-900 mb-4 text-xl">ペルソナ生成設定</h3>
+              <h3 className="font-semibold text-gray-900 mb-4 text-xl">インタビュー対象者生成設定</h3>
               
               <div>
                 <label htmlFor="personaCount" className="block text-sm font-medium text-gray-700 mb-2">
-                  生成するペルソナの人数
+                  生成するインタビュー対象者の人数
                 </label>
                 <select
                   id="personaCount"
@@ -769,18 +800,31 @@ export default function Home() {
                   onChange={(e) => setPersonaCount(Number(e.target.value))}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value={3}>3人</option>
-                  <option value={4}>4人</option>
-                  <option value={5}>5人</option>
-                  <option value={6}>6人</option>
-                  <option value={7}>7人</option>
-                  <option value={8}>8人</option>
+                  {Array.from({ length: 13 }, (_, i) => i + 3).map(num => (
+                    <option key={num} value={num}>{num}人</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="interviewCount" className="block text-sm font-medium text-gray-700 mb-2">
+                  実際にインタビューする人数
+                </label>
+                <select
+                  id="interviewCount"
+                  value={interviewCount}
+                  onChange={(e) => setInterviewCount(Number(e.target.value))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
+                    <option key={num} value={num}>{num}人</option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label htmlFor="personaCharacteristics" className="block text-sm font-medium text-gray-700 mb-2">
-                  ペルソナの特徴指定（任意）
+                  インタビュー対象者の特徴指定（任意）
                 </label>
                 <textarea
                   id="personaCharacteristics"
@@ -805,7 +849,7 @@ export default function Home() {
                 )}
                 className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                {loading ? <LoadingSpinner size="sm" /> : 'ペルソナを生成'}
+                {loading ? <LoadingSpinner size="sm" /> : 'インタビュー対象者を生成'}
               </button>
             </div>
           </div>
@@ -816,9 +860,9 @@ export default function Home() {
           <div className="space-y-6">
             {showProgress && <StepProgress />}
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">💬 インタビュー相手を選択</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">💬 インタビュー対象者を選択</h2>
               <p className="text-gray-600">
-                インタビューしたい3名のペルソナを選択してください ({selectedPersonas.length}/3)
+                インタビューしたい{interviewCount}名の対象者を選択してください ({selectedPersonas.length}/{interviewCount})
               </p>
               <p className="text-sm text-gray-500 mt-2">
                 チャット形式でインタビューを行います
@@ -845,7 +889,7 @@ export default function Home() {
               </button>
               <button
                 onClick={handleStartInterview}
-                disabled={loading || selectedPersonas.length !== 3}
+                disabled={loading || selectedPersonas.length !== interviewCount}
                 className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {loading ? <LoadingSpinner size="sm" /> : 'インタビューを開始'}
@@ -995,6 +1039,113 @@ export default function Home() {
 
       case 3:
         return (
+          <div className="max-w-4xl mx-auto space-y-8">
+            {showProgress && <StepProgress />}
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">📊 分析タイプを選択</h2>
+              <p className="text-gray-600">
+                実行したい分析タイプを選択してください（複数選択可能）
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div 
+                className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                  selectedAnalysisTypes.includes('target_analysis') 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => {
+                  if (selectedAnalysisTypes.includes('target_analysis')) {
+                    setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'target_analysis'));
+                  } else {
+                    setSelectedAnalysisTypes([...selectedAnalysisTypes, 'target_analysis']);
+                  }
+                }}
+              >
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selectedAnalysisTypes.includes('target_analysis') 
+                      ? 'border-blue-500 bg-blue-500' 
+                      : 'border-gray-300'
+                  }`}>
+                    {selectedAnalysisTypes.includes('target_analysis') && (
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">ターゲット分析</h3>
+                </div>
+                <p className="text-gray-600 mb-4">
+                  商品/サービスが誰に刺さるか？なんで刺さるか？を分析します
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1">
+                  <li>• このサービスは特に誰に刺さるか？</li>
+                  <li>• 刺さる価値は何か？</li>
+                  <li>• その価値をこの人たちに伝えるにはどうすればよいか？</li>
+                </ul>
+              </div>
+
+              <div 
+                className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                  selectedAnalysisTypes.includes('improvement_analysis') 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => {
+                  if (selectedAnalysisTypes.includes('improvement_analysis')) {
+                    setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'improvement_analysis'));
+                  } else {
+                    setSelectedAnalysisTypes([...selectedAnalysisTypes, 'improvement_analysis']);
+                  }
+                }}
+              >
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selectedAnalysisTypes.includes('improvement_analysis') 
+                      ? 'border-blue-500 bg-blue-500' 
+                      : 'border-gray-300'
+                  }`}>
+                    {selectedAnalysisTypes.includes('improvement_analysis') && (
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">改善分析</h3>
+                </div>
+                <p className="text-gray-600 mb-4">
+                  こういう人に刺さるようにするためには今の商品/サービスをどうしたらよいか？を分析します
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1">
+                  <li>• マーケットイン視点：未充足ニーズを満たすべきか？</li>
+                  <li>• 商品戦略視点：プロダクト/サービスをどう磨くか？</li>
+                  <li>• マーケティング戦略視点：どのように伝え、広げるか？</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={() => setStep(2)}
+                className="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-medium"
+              >
+                戻る
+              </button>
+              <button
+                onClick={handleAnalysisTypeSelection}
+                disabled={loading || selectedAnalysisTypes.length === 0}
+                className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {loading ? <LoadingSpinner size="sm" /> : '分析を開始'}
+              </button>
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
           <div className="max-w-7xl mx-auto space-y-8">
             {showProgress && <StepProgress />}
             
@@ -1003,6 +1154,7 @@ export default function Home() {
                  <ComprehensiveAnalysisView
                    personaSummaries={personaSummaries}
                    finalInsight={finalAnalysis}
+                   customAnalysisResults={customAnalysisResults}
                    onAdditionalInterview={() => setShowAdditionalQuestionDialog(true)}
                    loading={loading}
                    forceActiveTab={forceActiveTab}

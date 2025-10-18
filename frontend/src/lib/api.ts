@@ -120,6 +120,18 @@ export interface FinalAnalysisResponse {
   };
 }
 
+export interface CustomFinalAnalysisResponse {
+  final_summaries: Record<string, string>;
+  analysis_results: Record<string, string>;
+  analysis_types: string[];
+  stats: {
+    elapsed_time: number;
+    input_chars: number;
+    output_chars: number;
+    estimated_cost: number;
+  };
+}
+
 export const apiClient = {
   // API接続テスト（長めのタイムアウトを設定）
   testConnection: async (): Promise<{ status: string; message: string }> => {
@@ -211,6 +223,18 @@ export const apiClient = {
   // 最終分析を生成
   generateFinalAnalysis: async (): Promise<FinalAnalysisResponse> => {
     const response = await api.post('/api/generate-final-analysis');
+    return response.data;
+  },
+
+  // 分析タイプを設定
+  setAnalysisTypes: async (analysisTypes: string[]): Promise<{ analysis_types: string[]; message: string }> => {
+    const response = await api.post('/api/set-analysis-types', { analysis_types: analysisTypes });
+    return response.data;
+  },
+
+  // カスタム最終分析を生成
+  generateCustomFinalAnalysis: async (): Promise<CustomFinalAnalysisResponse> => {
+    const response = await api.post('/api/generate-custom-final-analysis');
     return response.data;
   },
 

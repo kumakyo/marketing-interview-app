@@ -14,7 +14,8 @@ interface PersonaInterviewSummary {
 
 interface ComprehensiveAnalysisViewProps {
   personaSummaries: PersonaInterviewSummary[];
-  finalInsight: string;
+  finalInsight?: string;
+  customAnalysisResults?: any;
   onAdditionalInterview?: () => void;
   loading?: boolean;
   forceActiveTab?: 'summary' | 'insights' | number;
@@ -23,6 +24,7 @@ interface ComprehensiveAnalysisViewProps {
 const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
   personaSummaries,
   finalInsight,
+  customAnalysisResults,
   onAdditionalInterview,
   loading,
   forceActiveTab
@@ -59,6 +61,17 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
             📊 サマリ
           </button>
           
+          <button
+            onClick={() => setActiveTab('insights')}
+            className={`${
+              activeTab === 'insights'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+          >
+            🎯 インサイト分析
+          </button>
+          
           {personaSummaries.map((summary, index) => (
             <button
               key={index}
@@ -72,17 +85,6 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
               👤 {summary.personaName}
             </button>
           ))}
-          
-          <button
-            onClick={() => setActiveTab('insights')}
-            className={`${
-              activeTab === 'insights'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-          >
-            🎯 最終インサイト
-          </button>
         </nav>
       </div>
 
@@ -138,10 +140,40 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
 
         {activeTab === 'insights' && (
           <div className="space-y-6">
-            <InsightAnalysis 
-              analysis={finalInsight} 
-              title="🎯 最終マーケティング戦略分析"
-            />
+            {customAnalysisResults ? (
+              <div className="space-y-8">
+                {customAnalysisResults.analysis_results?.target_analysis && (
+                  <div className="bg-white border-2 border-blue-200 rounded-lg p-6">
+                    <h3 className="text-xl font-semibold text-blue-900 mb-4">🎯 ターゲット分析</h3>
+                    <div className="prose max-w-none">
+                      <pre className="whitespace-pre-wrap text-gray-700 font-sans">
+                        {customAnalysisResults.analysis_results.target_analysis}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+                
+                {customAnalysisResults.analysis_results?.improvement_analysis && (
+                  <div className="bg-white border-2 border-green-200 rounded-lg p-6">
+                    <h3 className="text-xl font-semibold text-green-900 mb-4">🔧 改善分析</h3>
+                    <div className="prose max-w-none">
+                      <pre className="whitespace-pre-wrap text-gray-700 font-sans">
+                        {customAnalysisResults.analysis_results.improvement_analysis}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : finalInsight ? (
+              <InsightAnalysis 
+                analysis={finalInsight} 
+                title="🎯 最終マーケティング戦略分析"
+              />
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>分析結果がありません</p>
+              </div>
+            )}
           </div>
         )}
       </div>
