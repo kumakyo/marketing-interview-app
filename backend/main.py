@@ -712,32 +712,31 @@ async def conduct_interview(request: InterviewRequest):
                 "follow_ups": []
             }
             
-            # 更問を2回実行
-            for follow_up_num in range(1, 3):
-                follow_up_prompt = f"""
-                あなたは優秀なインタビュアーです。これまでの{persona.name}さんとの会話を読んで、
-                特に直前の回答について、具体的な行動や感情、潜在的なニーズをさらに深掘りするような、
-                1つの簡潔で具体的な質問を作成してください。
-                質問は「〇〇について、もう少し詳しく教えていただけますか？」のような対話形式でお願いします。
-                
-                直前の質問: {question}
-                直前の回答: {main_answer}
-                """
-                
+            # 更問を1回実行（時短のため）
+            follow_up_prompt = f"""
+            あなたは優秀なインタビュアーです。これまでの{persona.name}さんとの会話を読んで、
+            特に直前の回答について、具体的な行動や感情、潜在的なニーズをさらに深掘りするような、
+            1つの簡潔で具体的な質問を作成してください。
+            質問は「〇〇について、もう少し詳しく教えていただけますか？」のような対話形式でお願いします。
+            
+            直前の質問: {question}
+            直前の回答: {main_answer}
+            """
+            
+            try:
                 follow_up_question = generate_text(follow_up_prompt, temperature=0.7)
                 
                 if follow_up_question and "エラー" not in follow_up_question:
-                    try:
-                        follow_up_response = chat.send_message(follow_up_question)
-                        follow_up_answer = follow_up_response.text
-                        
-                        question_result["follow_ups"].append({
-                            "question": follow_up_question,
-                            "answer": follow_up_answer
-                        })
-                    except Exception as e:
-                        logger.error(f"更問への回答生成エラー: {e}")
-                        break
+                    follow_up_response = chat.send_message(follow_up_question)
+                    follow_up_answer = follow_up_response.text
+                    
+                    question_result["follow_ups"].append({
+                        "question": follow_up_question,
+                        "answer": follow_up_answer
+                    })
+            except Exception as e:
+                logger.error(f"更問への回答生成エラー: {e}")
+                # エラーが発生してもインタビューを継続
             
             interview_results.append(question_result)
         
@@ -752,7 +751,9 @@ async def conduct_interview(request: InterviewRequest):
     
     except Exception as e:
         logger.error(f"インタビュー実行エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"インタビューの実行に失敗しました: {e}")
+        import traceback
+        logger.error(f"詳細エラー: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"インタビューの実行に失敗しました: {str(e)}")
 
 @app.post("/api/generate-analysis")
 async def generate_analysis():
@@ -1093,32 +1094,31 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
                 "follow_ups": []
             }
             
-            # 更問を2回実行
-            for follow_up_num in range(1, 3):
-                follow_up_prompt = f"""
-                あなたは戦略的なインタビュアーです。これまでの{persona.name}さんとの会話履歴を読み、
-                より深い洞察を得るために、直前の回答について、より具体的で洞察的な情報を引き出すような、
-                1つの質問を作成してください。
-                質問は「〇〇について、どのように感じますか？」のような対話形式でお願いします。
-                
-                直前の質問: {question}
-                直前の回答: {main_answer}
-                """
-                
+            # 更問を1回実行（時短のため）
+            follow_up_prompt = f"""
+            あなたは戦略的なインタビュアーです。これまでの{persona.name}さんとの会話履歴を読み、
+            より深い洞察を得るために、直前の回答について、より具体的で洞察的な情報を引き出すような、
+            1つの質問を作成してください。
+            質問は「〇〇について、どのように感じますか？」のような対話形式でお願いします。
+            
+            直前の質問: {question}
+            直前の回答: {main_answer}
+            """
+            
+            try:
                 follow_up_question = generate_text(follow_up_prompt, temperature=0.7)
                 
                 if follow_up_question and "エラー" not in follow_up_question:
-                    try:
-                        follow_up_response = chat.send_message(follow_up_question)
-                        follow_up_answer = follow_up_response.text
-                        
-                        question_result["follow_ups"].append({
-                            "question": follow_up_question,
-                            "answer": follow_up_answer
-                        })
-                    except Exception as e:
-                        logger.error(f"更問への回答生成エラー: {e}")
-                        break
+                    follow_up_response = chat.send_message(follow_up_question)
+                    follow_up_answer = follow_up_response.text
+                    
+                    question_result["follow_ups"].append({
+                        "question": follow_up_question,
+                        "answer": follow_up_answer
+                    })
+            except Exception as e:
+                logger.error(f"更問への回答生成エラー: {e}")
+                # エラーが発生してもインタビューを継続
             
             interview_results.append(question_result)
         
@@ -1133,7 +1133,9 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
     
     except Exception as e:
         logger.error(f"追加インタビュー実行エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"追加インタビューの実行に失敗しました: {e}")
+        import traceback
+        logger.error(f"詳細エラー: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"追加インタビューの実行に失敗しました: {str(e)}")
 
 @app.post("/api/generate-final-analysis")
 async def generate_final_analysis():
