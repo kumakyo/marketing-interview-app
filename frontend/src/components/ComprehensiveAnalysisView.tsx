@@ -142,9 +142,42 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
           <div className="space-y-6">
             {customAnalysisResults ? (
               <div className="space-y-8">
-                {customAnalysisResults.analysis_results?.target_analysis && (
+                {customAnalysisResults.analysis_results?.market_structure && (
+                  <div className="bg-white border-2 border-purple-200 rounded-lg p-6">
+                    <h3 className="text-xl font-semibold text-purple-900 mb-4">📊 市場構造の理解</h3>
+                    <div className="prose max-w-none">
+                      <pre className="whitespace-pre-wrap text-gray-700 font-sans">
+                        {customAnalysisResults.analysis_results.market_structure}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+                
+                {customAnalysisResults.analysis_results?.customer_needs && (
                   <div className="bg-white border-2 border-blue-200 rounded-lg p-6">
-                    <h3 className="text-xl font-semibold text-blue-900 mb-4">🎯 ターゲット分析</h3>
+                    <h3 className="text-xl font-semibold text-blue-900 mb-4">🎯 消費者ニーズの確認</h3>
+                    <div className="prose max-w-none">
+                      <pre className="whitespace-pre-wrap text-gray-700 font-sans">
+                        {customAnalysisResults.analysis_results.customer_needs}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+                
+                {customAnalysisResults.analysis_results?.product_improvement && (
+                  <div className="bg-white border-2 border-green-200 rounded-lg p-6">
+                    <h3 className="text-xl font-semibold text-green-900 mb-4">🔧 商品・サービスのブラッシュアップ</h3>
+                    <div className="prose max-w-none">
+                      <pre className="whitespace-pre-wrap text-gray-700 font-sans">
+                        {customAnalysisResults.analysis_results.product_improvement}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+                
+                {customAnalysisResults.analysis_results?.target_analysis && (
+                  <div className="bg-white border-2 border-orange-200 rounded-lg p-6">
+                    <h3 className="text-xl font-semibold text-orange-900 mb-4">🎯 ターゲット分析</h3>
                     <div className="prose max-w-none">
                       <pre className="whitespace-pre-wrap text-gray-700 font-sans">
                         {customAnalysisResults.analysis_results.target_analysis}
@@ -154,8 +187,8 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
                 )}
                 
                 {customAnalysisResults.analysis_results?.improvement_analysis && (
-                  <div className="bg-white border-2 border-green-200 rounded-lg p-6">
-                    <h3 className="text-xl font-semibold text-green-900 mb-4">🔧 改善分析</h3>
+                  <div className="bg-white border-2 border-teal-200 rounded-lg p-6">
+                    <h3 className="text-xl font-semibold text-teal-900 mb-4">🔧 改善分析</h3>
                     <div className="prose max-w-none">
                       <pre className="whitespace-pre-wrap text-gray-700 font-sans">
                         {customAnalysisResults.analysis_results.improvement_analysis}

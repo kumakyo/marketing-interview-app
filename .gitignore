@@ -1,49 +1,82 @@
-# Environment variables
+# 環境変数ファイル（機密情報）
 .env
 .env.local
-.env.production
+.env.*.local
+*.env
+
+# SSL証明書（機密情報）
+certs/
+certificates/
+*.pem
+*.key
+*.crt
 
 # Python
+venv/
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
-.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
 # Next.js
 .next/
 out/
-build/
+.vercel
 
-# Docker
-.docker/
+# データベース
+*.db
+*.sqlite
+*.sqlite3
+data/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# ログファイル
+*.log
+logs/
+nohup.out
 
 # OS
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
-# Logs
-*.log
-logs/
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.cursor/
 
-# Output
-output/
-*.txt
-!requirements.txt
-!**/requirements.txt
+# テスト
+.coverage
+htmlcov/
+.pytest_cache/
+
+# その他
+*.bak
+*.tmp
+.cache/
