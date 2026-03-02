@@ -14,7 +14,7 @@
 | **姉妹サイト** | AI Survey（定量調査）: `https://tames-frontend-staging-128899916170.asia-northeast1.run.app/` |
 | **リポジトリ** | `https://github.com/kumakyo/marketing-interview-app.git` |
 | **ブランチ** | `main`（単一ブランチ運用） |
-| **最新コミット** | `e39e1c6` - UI polish: home cards, consistent button styles |
+| **最新コミット** | `796392d` - Consolidate next.config.ts, remove next.config.js for Cloud Run deployment |
 
 ---
 
@@ -47,7 +47,8 @@
 | 技術 | 用途 |
 |------|------|
 | GCP Cloud Run | バックエンド・フロントエンドホスティング |
-| GCP Secret Manager | シークレット管理（GOOGLE_API_KEY, OAuth, NEXTAUTH_SECRET, DATABASE_URL） |
+| GCP Cloud SQL (PostgreSQL) | 本番データベース（`work-487701:asia-northeast1:marketing-db`） |
+| GCP Artifact Registry | Docker イメージ管理（`marketing-repo`） |
 | Docker | コンテナ化 |
 
 ---
@@ -75,8 +76,8 @@ marketing-interview/
 ├── frontend/
 │   ├── Dockerfile              # Cloud Run フロントエンド用（マルチステージ）
 │   ├── package.json
-│   ├── next.config.ts          # Next.js 設定（standalone 出力）
-│   ├── next.config.js          # Next.js 設定（CORS ヘッダー、リライト）
+│   ├── next.config.ts          # Next.js 設定（standalone 出力、CORS ヘッダー）
+│   ├── .dockerignore           # Docker ビルド時に .env* 等を除外
 │   └── src/
 │       ├── app/
 │       │   ├── page.tsx        # メインアプリ画面（1,609行、4ステップ管理）
@@ -219,9 +220,8 @@ Step 3: 分析結果表示（自動一括実行）
 | JWT 認証 | 完了 | HS256、NEXTAUTH_SECRET で署名・検証 |
 | CORS | 完了 | 環境変数 `CORS_ALLOWED_ORIGINS` で制御 |
 | レート制限 | 完了 | slowapi: 60リクエスト/分/IP |
-| Secret Manager | スクリプト準備済 | `scripts/deploy-cloudrun.sh` で自動設定 |
-| Cloud Run IAM | スクリプト準備済 | フロントエンド → バックエンドの呼び出し権限 |
 | .gitignore | 完了 | .env, .env.backup*, setup-oauth-env* を除外 |
+| .dockerignore | 完了 | `.env*` をDockerビルドから除外（env漏洩防止） |
 
 ---
 
@@ -263,18 +263,33 @@ cd backend && pip install -r requirements.txt && uvicorn main:app --reload --por
 cd frontend && npm install && npm run dev
 ```
 
-### Cloud Run デプロイ
+### Cloud Run デプロイ（本番環境）
+
+| サービス | URL | 認証 |
+|----------|-----|------|
+| フロントエンド | `https://frontend-591352320240.asia-northeast1.run.app` | 不要（公開） |
+| バックエンド | `https://backend-591352320240.asia-northeast1.run.app` | 不要（公開） |
+
+**GCP プロジェクト**: `work-487701`  
+**リージョン**: `asia-northeast1`  
+**Artifact Registry**: `asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/`
+
+#### デプロイ手順（手動）
 ```bash
-export GCP_PROJECT_ID="your-project-id"
-bash scripts/deploy-cloudrun.sh
+# バックエンド
+cd backend
+docker build -t asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/backend:latest .
+docker push asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/backend:latest
+gcloud run deploy backend --image asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/backend:latest --region asia-northeast1 --add-cloudsql-instances work-487701:asia-northeast1:marketing-db --allow-unauthenticated
+
+# フロントエンド
+cd frontend
+docker build --build-arg NEXT_PUBLIC_API_URL=https://backend-591352320240.asia-northeast1.run.app -t asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/frontend:latest .
+docker push asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/frontend:latest
+gcloud run deploy frontend --image asia-northeast1-docker.pkg.dev/work-487701/marketing-repo/frontend:latest --region asia-northeast1 --allow-unauthenticated
 ```
 
-デプロイスクリプトが以下を自動化:
-1. Secret Manager にシークレット登録
-2. バックエンド Cloud Run デプロイ（認証必須）
-3. フロントエンド Cloud Run デプロイ（認証不要）
-4. CORS 設定更新
-5. IAM バインディング
+**重要**: フロントエンドの `.dockerignore` に `.env*` を含めること（ビルド時にローカル env が混入するバグを防止）
 
 ### 必要な環境変数
 | 変数名 | 用途 | 設定場所 |
@@ -295,20 +310,21 @@ bash scripts/deploy-cloudrun.sh
 
 | カテゴリ | 内容 | 優先度 |
 |----------|------|--------|
-| 設定 | `next.config.ts` と `next.config.js` が両方存在。統一が必要 | 中 |
 | ルート | ルートに開発用 Python スクリプトが多数残存（start-*.py, debug-*.py 等）。整理が必要 | 低 |
 | バックエンド | `backend/main.py` が 2,226 行と巨大。ルーター分割を検討 | 中 |
-| セキュリティ | Cloud Run デプロイがまだ実行されていない（スクリプトは準備済み） | 高 |
 | テスト | 自動テスト未実装 | 中 |
 | DB | ローカルは SQLite、本番は PostgreSQL。マイグレーション戦略が未定義 | 中 |
 | UI | Electron 関連コード（electron/main.js, preload.js）が残存。Web 専用なら削除可 | 低 |
 | PPTX | PowerPoint 出力のデザイン・内容の品質向上余地あり | 低 |
+| セキュリティ | バックエンドが `--allow-unauthenticated`。IAM 制限を検討 | 中 |
 
 ---
 
 ## 11. Git 履歴（直近10コミット）
 
 ```
+796392d Consolidate next.config.ts, remove next.config.js for Cloud Run deployment
+27b3a4d Add development status document for AI context sharing
 e39e1c6 UI polish: home cards, consistent button styles, clean form sections matching AI Survey
 956fe50 Full rebuild: auth, sidebar UI, PPTX export, security hardening, design matching AI Survey
 d4ca49b Initial commit: tames interview - AIマーケティングインタビューシステム
@@ -317,8 +333,6 @@ d4ca49b Initial commit: tames interview - AIマーケティングインタビュ
 afc1a18 分析タイプ選択をプロジェクト設定ページに統合
 9d9f4a5 UI改善とフロー最適化
 e68a6e2 大幅機能改善: 分析タイプ選択、用語変更、可変人数対応
-9798f88 インタビューエラー修正と時短対応
-2ad1ba8 最終インサイト分析の表示を大幅改善
 ```
 
 ---
@@ -330,10 +344,43 @@ e68a6e2 大幅機能改善: 分析タイプ選択、用語変更、可変人数�
 | `backend/main.py` | 2,226 | 全 API エンドポイント |
 | `frontend/src/app/page.tsx` | 1,609 | メイン画面（4ステップ） |
 | `backend/pptx_generator.py` | 484 | PPTX レポート生成 |
-| `frontend/src/lib/api.ts` | 390 | API クライアント |
+| `frontend/src/lib/api.ts` | 370 | API クライアント（Bearer JWT 自動付与、withCredentials 不使用） |
 | `frontend/src/components/ComprehensiveAnalysisView.tsx` | 261 | 分析結果表示 |
 | `backend/db_manager.py` | 210 | DB 操作 |
 | `frontend/src/app/auth/signin/page.tsx` | 190 | ログインページ |
 | `backend/database.py` | 157 | DB モデル |
 | `frontend/src/components/Sidebar.tsx` | 155 | 左サイドバー |
 | `backend/auth.py` | 101 | JWT 認証 |
+
+---
+
+## 13. デプロイ済み Cloud Run 環境変数
+
+### バックエンド (`backend`)
+| 変数名 | 設定済み | 備考 |
+|--------|---------|------|
+| `DATABASE_URL` | Yes | Cloud SQL 経由 (`/cloudsql/work-487701:asia-northeast1:marketing-db`) |
+| `GOOGLE_API_KEY` | Yes | Google AI Studio (Gemini) API キー |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 |
+| `NEXTAUTH_SECRET` | Yes | JWT 署名検証用 |
+| `CORS_ALLOWED_ORIGINS` | Yes | `https://frontend-591352320240.asia-northeast1.run.app` |
+
+### フロントエンド (`frontend`)
+| 変数名 | 設定済み | 備考 |
+|--------|---------|------|
+| `NEXT_PUBLIC_API_URL` | Yes | ビルド引数 + ランタイム env |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 |
+| `NEXTAUTH_URL` | Yes | `https://frontend-591352320240.asia-northeast1.run.app` |
+| `NEXTAUTH_SECRET` | Yes | JWT 署名用 |
+
+---
+
+## 14. 解決済みバグ・トラブルシューティング
+
+| 日付 | 問題 | 原因 | 対処 |
+|------|------|------|------|
+| 2026-03-02 | `Cannot read properties of undefined (reading 'startsWith')` | `.dockerignore` が `.env*` を除外していなかったため、ローカルの `.env.production`（古いURL）がDockerビルドに混入。`api.ts` の `API_BASE_URL.startsWith()` が undefined で失敗 | `.dockerignore` に `.env*` 追加、`api.ts` 簡素化、`withCredentials: true` 削除 |
+| 2026-03-02 | ペルソナ生成失敗 | バックエンドの `GOOGLE_API_KEY` が古い無効なキーだった | Cloud Run env var を新しい API キーに更新 |
+| 2026-03-02 | Git push blocked (GH013) | 過去コミットに Google OAuth Client ID/Secret が含まれていた | `git reset --soft origin/main` で履歴をクリーンアップし再コミット |

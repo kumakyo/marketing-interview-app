@@ -1,60 +1,38 @@
 // API通信のユーティリティ関数
 import axios from 'axios';
 
-// 外部アクセス用のAPI URLを動的に決定
-const getApiBaseUrl = () => {
-  // ブラウザ環境でのみ実行
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-    
-    // 環境変数が設定されている場合はそれを優先
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return process.env.NEXT_PUBLIC_API_URL;
-    }
-    
-    // プロトコルをフロントエンドと一致させる
-    // （mkcertで生成された信頼された証明書を使用）
-    const apiProtocol = protocol === 'https:' ? 'https' : 'http';
-    
-    // ローカルホストの場合
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${apiProtocol}://localhost:8000`;
-    } else {
-      // 外部アクセスの場合は同じホスト名でポート8000を使用
-      return `${apiProtocol}://${hostname}:8000`;
-    }
+const getApiBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-  
-  // サーバーサイドレンダリング時はデフォルト値
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  if (typeof window !== 'undefined') {
+    const { hostname, protocol } = window.location;
+    const scheme = protocol === 'https:' ? 'https' : 'http';
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${scheme}://localhost:8000`;
+    }
+    return `${scheme}://${hostname}:8000`;
+  }
+  return 'http://localhost:8000';
 };
 
 const API_BASE_URL = getApiBaseUrl();
 
-// Axiosインスタンスの設定（CORS対応強化）
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  timeout: 300000, // 5分のタイムアウト（LLM処理のため長めに設定）
-  withCredentials: true, // クッキーと認証情報を含める
+  timeout: 300000,
 });
 
-// リクエストインターセプター: 全てのリクエストにCORS対応ヘッダーと認証ヘッダーを追加
 api.interceptors.request.use(
   async (config) => {
-    // 追加のヘッダー設定
-    config.headers['X-Requested-With'] = 'XMLHttpRequest';
-    
-    // NextAuth セッションからJWTトークンを取得
     if (typeof window !== 'undefined') {
       try {
         const { getSession } = await import('next-auth/react');
         const session = await getSession() as any;
-        
         if (session?.backendToken) {
           config.headers.Authorization = `Bearer ${session.backendToken}`;
         } else if (session?.user?.id) {
@@ -64,44 +42,24 @@ api.interceptors.request.use(
         console.warn('認証トークンの取得に失敗:', error);
       }
     }
-    
-    // HTTPSの自己署名証明書を無視（開発環境のみ）
-    if (typeof window !== 'undefined' && API_BASE_URL.startsWith('https://localhost')) {
-      // ブラウザ側ではこの設定は不要（サーバー側の設定）
-    }
-    
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error),
 );
 
-// レスポンスインターセプター: CORSエラーをより詳細にログ
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      // サーバーがエラーレスポンスを返した
       console.error('APIエラー:', error.response.status, error.response.data);
     } else if (error.request) {
-      // リクエストは送信されたがレスポンスがない（CORS問題の可能性）
-      console.error('ネットワークエラー（CORS問題の可能性）:', error.message);
-      console.error('API URL:', API_BASE_URL);
-      console.error('リクエスト詳細:', error.config);
+      console.error('ネットワークエラー:', error.message, 'URL:', API_BASE_URL);
     } else {
       console.error('リクエスト設定エラー:', error.message);
     }
     return Promise.reject(error);
-  }
+  },
 );
-
-// デバッグ用: API接続情報をコンソールに出力
-if (typeof window !== 'undefined') {
-  console.log('🔗 API Base URL:', API_BASE_URL);
-  console.log('🌐 Current hostname:', window.location.hostname);
-  console.log('🔒 Protocol:', window.location.protocol);
-}
 
 export interface ProductService {
   id: string;
