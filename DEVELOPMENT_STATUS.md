@@ -295,7 +295,7 @@ gcloud run deploy frontend --image asia-northeast1-docker.pkg.dev/work-487701/ma
 | 変数名 | 用途 | 設定場所 |
 |--------|------|----------|
 | `GCP_PROJECT_ID` | Vertex AI プロジェクト ID | Cloud Run 環境変数 |
-| `GCP_LOCATION` | Vertex AI リージョン | Cloud Run 環境変数 |
+| `GCP_LOCATION` | Vertex AI リージョン（`us-central1` 推奨） | Cloud Run 環境変数 |
 | `GOOGLE_CLIENT_ID` | Google OAuth クライアント ID | .env / Secret Manager |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット | .env / Secret Manager |
 | `NEXTAUTH_SECRET` | JWT 署名用シークレット | .env / Secret Manager |
@@ -363,7 +363,7 @@ e68a6e2 大幅機能改善: 分析タイプ選択、用語変更、可変人数�
 | `DATABASE_URL` | Yes | Cloud SQL 経由 (`/cloudsql/work-487701:asia-northeast1:marketing-db`) |
 | `GOOGLE_API_KEY` | 不要 | Vertex AI SDK に切替済み。サービスアカウント (ADC) で認証 |
 | `GCP_PROJECT_ID` | Yes | `work-487701` |
-| `GCP_LOCATION` | Yes | `asia-northeast1` |
+| `GCP_LOCATION` | Yes | `us-central1`（Gemini モデルは asia-northeast1 非対応のため） |
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 |
 | `NEXTAUTH_SECRET` | Yes | JWT 署名検証用 |
@@ -387,4 +387,5 @@ e68a6e2 大幅機能改善: 分析タイプ選択、用語変更、可変人数�
 | 2026-03-02 | `Cannot read properties of undefined (reading 'startsWith')` | `.dockerignore` が `.env*` を除外していなかったため、ローカルの `.env.production`（古いURL）がDockerビルドに混入。`api.ts` の `API_BASE_URL.startsWith()` が undefined で失敗 | `.dockerignore` に `.env*` 追加、`api.ts` 簡素化、`withCredentials: true` 削除 |
 | 2026-03-02 | ペルソナ生成失敗（API キー） | バックエンドの `GOOGLE_API_KEY` が古い無効なキーだった | Cloud Run env var を新しい API キーに更新 |
 | 2026-03-02 | 429 Quota exceeded (Free Tier) | `google-generativeai` (AI Studio SDK) は Free Tier 制限（10 req/min）が適用される | `google-cloud-aiplatform` (Vertex AI SDK) に切替。GCP 課金（無料トライアル含む）経由でレート制限大幅緩和。Vertex AI API 有効化 + サービスアカウントに `aiplatform.user` ロール付与 |
+| 2026-03-02 | 404 Publisher Model not found | `gemini-2.5-flash-lite` は `asia-northeast1` で Vertex AI 非対応 | `GCP_LOCATION` を `us-central1` に変更（Cloud Run は `asia-northeast1` のまま） |
 | 2026-03-02 | Git push blocked (GH013) | 過去コミットに Google OAuth Client ID/Secret が含まれていた | `git reset --soft origin/main` で履歴をクリーンアップし再コミット |
