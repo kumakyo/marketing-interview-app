@@ -14,7 +14,7 @@
 | **姉妹サイト** | AI Survey（定量調査）: `https://tames-frontend-staging-128899916170.asia-northeast1.run.app/` |
 | **リポジトリ** | `https://github.com/kumakyo/marketing-interview-app.git` |
 | **ブランチ** | `main`（単一ブランチ運用） |
-| **最新コミット** | `796392d` - Consolidate next.config.ts, remove next.config.js for Cloud Run deployment |
+| **最新コミット** | (後述の Git 履歴参照) |
 
 ---
 
@@ -25,7 +25,7 @@
 |------|-----------|------|
 | Python | 3.11 (Docker) / 3.9 (backend/Dockerfile) | ランタイム |
 | FastAPI | 0.115.5 | Web フレームワーク |
-| Google Generative AI (Gemini) | 0.8.3 | LLM（ペルソナ生成・インタビュー・分析） |
+| Vertex AI SDK (`google-cloud-aiplatform`) | >=1.38.0 | LLM（ペルソナ生成・インタビュー・分析）。GCP課金経由 |
 | SQLAlchemy | 2.0.25 | ORM |
 | SQLite / PostgreSQL | - | データベース（ローカル: SQLite、Cloud Run: PostgreSQL） |
 | python-jose | 3.5.0 | JWT 検証 |
@@ -294,7 +294,8 @@ gcloud run deploy frontend --image asia-northeast1-docker.pkg.dev/work-487701/ma
 ### 必要な環境変数
 | 変数名 | 用途 | 設定場所 |
 |--------|------|----------|
-| `GOOGLE_API_KEY` | Gemini API キー | .env / Secret Manager |
+| `GCP_PROJECT_ID` | Vertex AI プロジェクト ID | Cloud Run 環境変数 |
+| `GCP_LOCATION` | Vertex AI リージョン | Cloud Run 環境変数 |
 | `GOOGLE_CLIENT_ID` | Google OAuth クライアント ID | .env / Secret Manager |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット | .env / Secret Manager |
 | `NEXTAUTH_SECRET` | JWT 署名用シークレット | .env / Secret Manager |
@@ -360,7 +361,9 @@ e68a6e2 大幅機能改善: 分析タイプ選択、用語変更、可変人数�
 | 変数名 | 設定済み | 備考 |
 |--------|---------|------|
 | `DATABASE_URL` | Yes | Cloud SQL 経由 (`/cloudsql/work-487701:asia-northeast1:marketing-db`) |
-| `GOOGLE_API_KEY` | Yes | Google AI Studio (Gemini) API キー |
+| `GOOGLE_API_KEY` | 不要 | Vertex AI SDK に切替済み。サービスアカウント (ADC) で認証 |
+| `GCP_PROJECT_ID` | Yes | `work-487701` |
+| `GCP_LOCATION` | Yes | `asia-northeast1` |
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 |
 | `NEXTAUTH_SECRET` | Yes | JWT 署名検証用 |
@@ -382,5 +385,6 @@ e68a6e2 大幅機能改善: 分析タイプ選択、用語変更、可変人数�
 | 日付 | 問題 | 原因 | 対処 |
 |------|------|------|------|
 | 2026-03-02 | `Cannot read properties of undefined (reading 'startsWith')` | `.dockerignore` が `.env*` を除外していなかったため、ローカルの `.env.production`（古いURL）がDockerビルドに混入。`api.ts` の `API_BASE_URL.startsWith()` が undefined で失敗 | `.dockerignore` に `.env*` 追加、`api.ts` 簡素化、`withCredentials: true` 削除 |
-| 2026-03-02 | ペルソナ生成失敗 | バックエンドの `GOOGLE_API_KEY` が古い無効なキーだった | Cloud Run env var を新しい API キーに更新 |
+| 2026-03-02 | ペルソナ生成失敗（API キー） | バックエンドの `GOOGLE_API_KEY` が古い無効なキーだった | Cloud Run env var を新しい API キーに更新 |
+| 2026-03-02 | 429 Quota exceeded (Free Tier) | `google-generativeai` (AI Studio SDK) は Free Tier 制限（10 req/min）が適用される | `google-cloud-aiplatform` (Vertex AI SDK) に切替。GCP 課金（無料トライアル含む）経由でレート制限大幅緩和。Vertex AI API 有効化 + サービスアカウントに `aiplatform.user` ロール付与 |
 | 2026-03-02 | Git push blocked (GH013) | 過去コミットに Google OAuth Client ID/Secret が含まれていた | `git reset --soft origin/main` で履歴をクリーンアップし再コミット |

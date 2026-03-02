@@ -7,7 +7,8 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-import google.generativeai as genai
+import vertexai
+from vertexai.generative_models import GenerativeModel, GenerationConfig, Content, Part
 import textwrap
 import re
 import time
@@ -77,14 +78,14 @@ limiter = Limiter(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# --- APIキーの設定 ---
+# --- Vertex AI 初期化 ---
 try:
-    api_key = os.getenv('GOOGLE_API_KEY')
-    if not api_key:
-        raise ValueError("環境変数 'GOOGLE_API_KEY' が設定されていません。")
-    genai.configure(api_key=api_key)
-except ValueError as e:
-    logger.error(f"エラー: {e}")
+    _gcp_project = os.getenv("GCP_PROJECT_ID", "work-487701")
+    _gcp_location = os.getenv("GCP_LOCATION", "asia-northeast1")
+    vertexai.init(project=_gcp_project, location=_gcp_location)
+    logger.info(f"Vertex AI 初期化完了: project={_gcp_project}, location={_gcp_location}")
+except Exception as e:
+    logger.error(f"Vertex AI 初期化エラー: {e}")
 
 # --- 料金計算のための定数 ---
 INPUT_TOKEN_PRICE = 0.0000007 / 1000
@@ -192,48 +193,53 @@ def to_text(text):
     text = text.replace('•', ' *')
     return textwrap.dedent(text)
 
-def generate_text(prompt, model_name="models/gemini-2.5-flash-lite", temperature=0.8, max_retries=3, session_id=None):
-    """指定されたプロンプトと設定でテキストを生成する関数（リトライ機能付き）"""
+def generate_text(prompt, model_name="gemini-2.5-flash-lite", temperature=0.8, max_retries=5, session_id=None):
+    """Vertex AI でテキストを生成する関数（429 リトライ対応）"""
+    if model_name.startswith("models/"):
+        model_name = model_name[len("models/"):]
+
     retry_count = 0
     last_error = None
-    
+
     while retry_count < max_retries:
         try:
-            model = genai.GenerativeModel(model_name=model_name)
+            model = GenerativeModel(model_name)
             response = model.generate_content(
-                prompt, 
-                generation_config=genai.types.GenerationConfig(temperature=temperature)
+                prompt,
+                generation_config=GenerationConfig(temperature=temperature),
             )
-            
-            # セッションIDが指定されている場合は、そのセッションの統計を更新
+
             if session_id:
                 session = get_session(session_id)
                 session["total_input_chars"] += len(prompt)
                 if response.text:
                     session["total_output_chars"] += len(response.text)
-            
+
             return response.text
         except Exception as e:
             last_error = e
-            error_message = str(e)
-            
-            # APIオーバーロードまたは一時的なエラーの場合はリトライ
-            if ("overloaded" in error_message.lower() or 
-                "503" in error_message or 
-                "504" in error_message or
-                "unavailable" in error_message.lower() or
-                "timeout" in error_message.lower()):
+            error_message = str(e).lower()
+
+            retryable = (
+                "429" in str(e)
+                or "overloaded" in error_message
+                or "503" in str(e)
+                or "504" in str(e)
+                or "unavailable" in error_message
+                or "timeout" in error_message
+                or "resource exhausted" in error_message
+                or "quota" in error_message
+            )
+            if retryable:
                 retry_count += 1
-                wait_time = retry_count * 2  # 2秒、4秒、6秒と待機時間を増やす
+                wait_time = min(retry_count * 5, 60)
                 logger.warning(f"API一時エラー（リトライ {retry_count}/{max_retries}）: {e}。{wait_time}秒待機中...")
                 time.sleep(wait_time)
                 continue
             else:
-                # その他のエラーは即座に例外を投げる
                 logger.error(f"テキスト生成中にエラーが発生しました: {e}")
                 raise HTTPException(status_code=500, detail=f"テキスト生成エラー: {e}")
-    
-    # 最大リトライ回数に達した場合
+
     logger.error(f"テキスト生成が最大リトライ回数（{max_retries}）に達しました: {last_error}")
     raise HTTPException(status_code=503, detail=f"APIが過負荷状態です。しばらく待ってから再試行してください。")
 
@@ -666,7 +672,7 @@ async def select_personas(request: PersonaSelectionRequest, session_id: str = "d
         current_session["selected_personas"] = selected_personas
         
         # 各ペルソナのチャットセッションを初期化
-        model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
+        model = GenerativeModel("gemini-2.5-flash-lite")
         
         for persona in selected_personas:
             # 商品・サービス情報と競合情報を含むプロンプト
@@ -710,8 +716,8 @@ async def select_personas(request: PersonaSelectionRequest, session_id: str = "d
             """
             
             chat = model.start_chat(history=[
-                {'role': 'user', 'parts': [initial_prompt]},
-                {'role': 'model', 'parts': ['はい、準備ができました。何でも聞いてください。']}
+                Content(role="user", parts=[Part.from_text(initial_prompt)]),
+                Content(role="model", parts=[Part.from_text("はい、準備ができました。何でも聞いてください。")]),
             ])
             
             current_session["interview_sessions"][persona.name] = {
