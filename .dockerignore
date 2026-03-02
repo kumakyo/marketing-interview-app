@@ -1,0 +1,74 @@
+# Git関連
+.git
+.gitignore
+.gitattributes
+
+# Python仮想環境
+venv/
+.venv/
+env/
+ENV/
+
+# Pythonキャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# フロントエンド（Cloud Runバックエンドでは不要）
+frontend/
+node_modules/
+
+# 開発・テスト用スクリプト（VM用起動スクリプトなど）
+main.py
+start*.py
+launch*.py
+quick*.py
+test*.py
+check*.py
+debug*.py
+fix*.py
+
+# シェルスクリプト
+*.sh
+
+# ドキュメント
+*.md
+README*
+LICENSE*
+
+# ログファイル
+*.log
+nohup.out
+startup.log
+server.log
+
+# 証明書（Cloud Runでは不要）
+certs/
+certs.backup*/
+certificates/
+*.pem
+*.crt
+*.key
+
+# 設定ファイル（必要なもの以外）
+docker-compose.yml
+Dockerfile.dev
+.dockerignore
+
+# IDEとエディタ
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# その他の不要なディレクトリ
+original_script/
+terminals/
+
+# 環境変数ファイル（注意: 本番環境ではCloud Runの環境変数を使用）
+# .env は必要に応じてコメントアウトを解除
+# .env

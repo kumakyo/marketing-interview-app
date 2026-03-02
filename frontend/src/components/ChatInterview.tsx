@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { InterviewResult } from '@/lib/api';
 import ChatMessage from './ChatMessage';
+import PsychologyAnalysis from './PsychologyAnalysis';
 
 interface ChatInterviewProps {
   personaName: string;
@@ -56,6 +57,16 @@ const ChatInterview: React.FC<ChatInterviewProps> = ({
         />
       );
       
+      // メイン回答の深層心理分析
+      if (result.psychology_analysis) {
+        messages.push(
+          <PsychologyAnalysis
+            key={`p-${index}`}
+            analysis={result.psychology_analysis}
+          />
+        );
+      }
+      
       // フォローアップ質問と回答
       result.follow_ups?.forEach((followUp, fIndex) => {
         messages.push(
@@ -76,6 +87,16 @@ const ChatInterview: React.FC<ChatInterviewProps> = ({
             timestamp={formatTimestamp(new Date())}
           />
         );
+        
+        // フォローアップ回答の深層心理分析
+        if (followUp.psychology_analysis) {
+          messages.push(
+            <PsychologyAnalysis
+              key={`fp-${index}-${fIndex}`}
+              analysis={followUp.psychology_analysis}
+            />
+          );
+        }
       });
     });
     

@@ -171,29 +171,30 @@ def main():
             )
             frontend_url = "https://localhost:3001"
         else:
+            print_status("⚠️ フロントエンドをHTTPモードで起動中...")
             frontend_process = subprocess.Popen(
                 ["npm", "run", "dev-network-3001"],
                 cwd="frontend"
             )
             frontend_url = "http://localhost:3001"
-        
-        # フロントエンド起動確認（簡単な方法）
-        print_status("フロントエンドの起動を確認中...", "⏳")
-        for i in range(60):
-            try:
-                # ポートリスニング確認
-                result = subprocess.run(['ss', '-tln'], capture_output=True, text=True)
-                if ':3001' in result.stdout:
-                    print_status("✅ フロントエンド起動完了", "🎉")
-                    break
-            except:
-                pass
-            time.sleep(2)
-            if i % 5 == 0:
-                print(".", end="", flush=True)
-        else:
-            print_status("⚠️ フロントエンドの起動確認がタイムアウトしました", "💥")
-            print_status(f"手動で {frontend_url} にアクセスしてください", "🔗")
+    
+    # フロントエンド起動確認（簡単な方法）
+    print_status("フロントエンドの起動を確認中...", "⏳")
+    for i in range(60):
+        try:
+            # ポートリスニング確認
+            result = subprocess.run(['ss', '-tln'], capture_output=True, text=True)
+            if ':3001' in result.stdout:
+                print_status("✅ フロントエンド起動完了", "🎉")
+                break
+        except:
+            pass
+        time.sleep(2)
+        if i % 5 == 0:
+            print(".", end="", flush=True)
+    else:
+        print_status("⚠️ フロントエンドの起動確認がタイムアウトしました", "💥")
+        print_status(f"手動で {frontend_url} にアクセスしてください", "🔗")
     
     # 成功メッセージ
     print("\n" + "=" * 60)

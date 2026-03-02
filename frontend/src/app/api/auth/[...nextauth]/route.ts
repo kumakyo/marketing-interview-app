@@ -1,7 +1,26 @@
-import NextAuth from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
+import NextAuth, { NextAuthOptions } from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
+import { SignJWT } from "jose";
 
-export const authOptions = {
+const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "");
+
+async function createBackendToken(payload: {
+  sub: string;
+  email?: string | null;
+  name?: string | null;
+}): Promise<string> {
+  return await new SignJWT({
+    sub: payload.sub,
+    email: payload.email ?? undefined,
+    name: payload.name ?? undefined,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("24h")
+    .sign(secret);
+}
+
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
@@ -9,31 +28,36 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, account, profile }) {
-      // 初回ログイン時にユーザー情報を追加
-      if (account && profile) {
-        token.accessToken = account.access_token
-        token.id = profile.sub
-        token.email = profile.email
+    async signIn({ user }) {
+      console.log("Google Login Success:", user.email);
+      return true;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
       }
-      return token
+      token.backendToken = await createBackendToken({
+        sub: token.sub || "",
+        email: token.email,
+        name: token.name,
+      });
+      return token;
     },
     async session({ session, token }) {
-      // セッションにユーザーIDとトークンを追加
       if (session.user) {
-        session.user.id = token.id as string
-        session.accessToken = token.accessToken as string
+        session.user.id = token.sub || "";
+        (session as any).backendToken = token.backendToken;
       }
-      return session
+      return session;
     },
   },
   pages: {
-    signIn: '/auth/signin',
+    signIn: "/auth/signin",
+    error: "/auth/error",
   },
   secret: process.env.NEXTAUTH_SECRET,
-}
+};
 
-const handler = NextAuth(authOptions)
+const handler = NextAuth(authOptions);
 
-export { handler as GET, handler as POST }
-
+export { handler as GET, handler as POST };

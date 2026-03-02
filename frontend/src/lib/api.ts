@@ -13,12 +13,16 @@ const getApiBaseUrl = () => {
       return process.env.NEXT_PUBLIC_API_URL;
     }
     
+    // プロトコルをフロントエンドと一致させる
+    // （mkcertで生成された信頼された証明書を使用）
+    const apiProtocol = protocol === 'https:' ? 'https' : 'http';
+    
     // ローカルホストの場合
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8000';
+      return `${apiProtocol}://localhost:8000`;
     } else {
       // 外部アクセスの場合は同じホスト名でポート8000を使用
-      return `${protocol}//${hostname}:8000`;
+      return `${apiProtocol}://${hostname}:8000`;
     }
   }
   
@@ -28,19 +32,75 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// Axiosインスタンスの設定（CORS対応強化）
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   },
   timeout: 300000, // 5分のタイムアウト（LLM処理のため長めに設定）
-  withCredentials: false, // CORS対応
+  withCredentials: true, // クッキーと認証情報を含める
 });
+
+// リクエストインターセプター: 全てのリクエストにCORS対応ヘッダーと認証ヘッダーを追加
+api.interceptors.request.use(
+  async (config) => {
+    // 追加のヘッダー設定
+    config.headers['X-Requested-With'] = 'XMLHttpRequest';
+    
+    // NextAuth セッションからJWTトークンを取得
+    if (typeof window !== 'undefined') {
+      try {
+        const { getSession } = await import('next-auth/react');
+        const session = await getSession() as any;
+        
+        if (session?.backendToken) {
+          config.headers.Authorization = `Bearer ${session.backendToken}`;
+        } else if (session?.user?.id) {
+          config.headers.Authorization = `Bearer ${session.user.id}`;
+        }
+      } catch (error) {
+        console.warn('認証トークンの取得に失敗:', error);
+      }
+    }
+    
+    // HTTPSの自己署名証明書を無視（開発環境のみ）
+    if (typeof window !== 'undefined' && API_BASE_URL.startsWith('https://localhost')) {
+      // ブラウザ側ではこの設定は不要（サーバー側の設定）
+    }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// レスポンスインターセプター: CORSエラーをより詳細にログ
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      // サーバーがエラーレスポンスを返した
+      console.error('APIエラー:', error.response.status, error.response.data);
+    } else if (error.request) {
+      // リクエストは送信されたがレスポンスがない（CORS問題の可能性）
+      console.error('ネットワークエラー（CORS問題の可能性）:', error.message);
+      console.error('API URL:', API_BASE_URL);
+      console.error('リクエスト詳細:', error.config);
+    } else {
+      console.error('リクエスト設定エラー:', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
 
 // デバッグ用: API接続情報をコンソールに出力
 if (typeof window !== 'undefined') {
   console.log('🔗 API Base URL:', API_BASE_URL);
   console.log('🌐 Current hostname:', window.location.hostname);
+  console.log('🔒 Protocol:', window.location.protocol);
 }
 
 export interface ProductService {
@@ -82,7 +142,9 @@ export interface InterviewResult {
   follow_ups: {
     question: string;
     answer: string;
+    psychology_analysis?: string; // フォローアップ回答の深層心理
   }[];
+  psychology_analysis?: string; // メイン回答の深層心理
 }
 
 export interface InterviewResponse {
@@ -283,6 +345,44 @@ export const apiClient = {
     }[] 
   }> => {
     const response = await api.post('/api/generate-interview-summary');
+    return response.data;
+  },
+
+  // 深層心理を解析
+  analyzePsychology: async (
+    personaContext: string,
+    userMessage: string,
+    personaResponse: string,
+    sessionId: string = 'default'
+  ): Promise<{ psychology_analysis: string }> => {
+    const response = await api.post('/api/analyze-psychology', {
+      persona_context: personaContext,
+      user_message: userMessage,
+      persona_response: personaResponse,
+      session_id: sessionId
+    });
+    return response.data;
+  },
+
+  // PowerPointレポートをエクスポート
+  exportPptx: async (sessionId: string = 'default'): Promise<Blob> => {
+    const response = await api.post('/api/export-pptx', {
+      session_id: sessionId,
+      include_final_analysis: true,
+      include_custom_analysis: true,
+    }, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // 入力履歴を取得
+  getInputHistory: async (sessionId: string = 'default'): Promise<{
+    products_services: any[];
+    competitors: any[];
+    topics: string[];
+  }> => {
+    const response = await api.get(`/api/input-history?session_id=${sessionId}`);
     return response.data;
   },
 };

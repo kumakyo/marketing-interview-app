@@ -152,7 +152,7 @@ const ChatPersonaCard: React.FC<ChatPersonaCardProps> = ({ persona, isSelected, 
               className="w-full h-full object-cover"
             />
           </div>
-        </div>
+            </div>
 
         {/* タイトル */}
         <h3 className="text-lg font-bold text-center text-gray-900 mb-3 min-h-[56px] flex items-center justify-center">
@@ -172,7 +172,7 @@ const ChatPersonaCard: React.FC<ChatPersonaCardProps> = ({ persona, isSelected, 
             </span>
           )}
         </div>
-
+        
         {/* 職業 */}
         {persona.details?.職業 && (
           <div className="text-center mb-4">
@@ -181,12 +181,12 @@ const ChatPersonaCard: React.FC<ChatPersonaCardProps> = ({ persona, isSelected, 
             </p>
           </div>
         )}
-
+          
         {/* 説明文 */}
         <div className="text-sm text-gray-600 leading-relaxed min-h-[80px]">
           {generateDescription()}
-        </div>
-
+          </div>
+          
         {/* 詳細情報の折りたたみ */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
@@ -203,9 +203,9 @@ const ChatPersonaCard: React.FC<ChatPersonaCardProps> = ({ persona, isSelected, 
             {persona.details?.家族構成 && (
               <div className="col-span-2">
                 <span className="font-medium">家族:</span> {persona.details.家族構成}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
         </div>
       </div>
     </div>

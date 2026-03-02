@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { apiClient, Persona, InterviewResult, ProductService, Competitor, ProjectInfo } from '@/lib/api';
 import PersonaCard from '@/components/PersonaCard';
 import InterviewCard from '@/components/InterviewCard';
@@ -12,8 +14,34 @@ import ChatInterview from '@/components/ChatInterview';
 import InterviewResults from '@/components/InterviewResults';
 import InsightAnalysis from '@/components/InsightAnalysis';
 import ComprehensiveAnalysisView from '@/components/ComprehensiveAnalysisView';
+import Sidebar from '@/components/Sidebar';
 
 export default function Home() {
+  // 認証状態の管理
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  
+  // 未ログイン時はログイン画面にリダイレクト
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin');
+    }
+  }, [status, router]);
+  // セッションID管理（マルチユーザー対応）
+  const [sessionId, setSessionId] = useState<string>('');
+  
+  // 入力履歴管理
+  const [inputHistory, setInputHistory] = useState<{
+    products_services: any[];
+    competitors: any[];
+    topics: string[];
+  }>({
+    products_services: [],
+    competitors: [],
+    topics: []
+  });
+  const [showHistoryDropdown, setShowHistoryDropdown] = useState(false);
+  
   const [step, setStep] = useState(0); // 0: プロジェクト情報入力から開始
   const [topic, setTopic] = useState('');
   const [productServices, setProductServices] = useState<ProductService[]>([]);
@@ -45,6 +73,7 @@ export default function Home() {
   const [additionalQuestions, setAdditionalQuestions] = useState<string[]>(['', '', '', '', '']);
   const [additionalInterviewResults, setAdditionalInterviewResults] = useState<Record<string, InterviewResult[]>>({});
   const [forceActiveTab, setForceActiveTab] = useState<'summary' | 'insights' | number | undefined>(undefined);
+  const [exportingPptx, setExportingPptx] = useState(false);
 
   // ステップ定義
   const steps = [
@@ -54,24 +83,29 @@ export default function Home() {
     { id: 3, title: "分析結果", description: "インタビューと分析結果" }
   ];
 
-  // ステップ進行状況表示コンポーネント
   const StepProgress = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border">
+    <div className="mb-6 card p-4">
       <div className="flex items-center justify-center">
         <div className="flex items-center space-x-2">
           {steps.map((stepInfo, index) => (
             <React.Fragment key={stepInfo.id}>
               <div className="flex flex-col items-center">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                     index < step
                       ? 'bg-green-500 text-white'
                       : index === step
-                      ? 'bg-blue-500 text-white'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-500'
                   }`}
                 >
-                  {index + 1}
+                  {index < step ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    index + 1
+                  )}
                 </div>
                 <span className={`text-xs mt-1 text-center max-w-[80px] ${
                   index === step ? 'text-blue-600 font-medium' : 'text-gray-500'
@@ -81,17 +115,7 @@ export default function Home() {
               </div>
               
               {index < steps.length - 1 && (
-                <div className="flex items-center">
-                  <svg 
-                    className={`w-4 h-4 ${
-                      index < step ? 'text-green-500' : 'text-gray-300'
-                    }`} 
-                    fill="currentColor" 
-                    viewBox="0 0 20 20"
-                  >
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                </div>
+                <div className={`w-8 h-0.5 ${index < step ? 'bg-green-500' : 'bg-gray-200'}`} />
               )}
             </React.Fragment>
           ))}
@@ -106,6 +130,16 @@ export default function Home() {
       try {
         setConnectionStatus('connecting');
         
+        // セッションIDの初期化（マルチユーザー対応）
+        let currentSessionId = localStorage.getItem('marketing_interview_session_id');
+        if (!currentSessionId) {
+          // 新しいセッションIDを生成
+          currentSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          localStorage.setItem('marketing_interview_session_id', currentSessionId);
+        }
+        setSessionId(currentSessionId);
+        console.log('セッションID:', currentSessionId);
+        
         // API接続テスト
         const connectionTest = await apiClient.testConnection();
         if (connectionTest.status === 'error') {
@@ -117,6 +151,30 @@ export default function Home() {
         
         setConnectionStatus('connected');
         
+        // 入力履歴を読み込み（localStorage）
+        try {
+          const savedHistory = localStorage.getItem('input_history');
+          if (savedHistory) {
+            const history = JSON.parse(savedHistory);
+            setInputHistory(history);
+            console.log('入力履歴を読み込みました:', history);
+            
+            // 最新の入力を自動記入（編集可能）
+            if (history.topics && history.topics.length > 0) {
+              setTopic(history.topics[history.topics.length - 1]);
+            }
+            if (history.products_services && history.products_services.length > 0) {
+              const lastProduct = history.products_services[history.products_services.length - 1];
+              setProductServices([lastProduct]);
+            }
+            if (history.competitors && history.competitors.length > 0) {
+              setCompetitors(history.competitors.slice(-2)); // 最新2件
+            }
+          }
+        } catch (err) {
+          console.warn('入力履歴の読み込みに失敗しました:', err);
+        }
+        
         // インタビュー履歴を読み込み
         try {
           const historyResponse = await apiClient.getInterviewHistory();
@@ -125,15 +183,17 @@ export default function Home() {
           console.warn('履歴の読み込みに失敗しました:', err);
         }
         
-        // 初期の商品・サービス情報を設定
-        setProductServices([{
-          id: '1',
-          name: '',
-          target_audience: '',
-          benefits: '',
-          benefit_reason: '',
-          basic_info: ''
-        }]);
+        // 初期の商品・サービス情報を設定（入力履歴がない場合）
+        if (productServices.length === 0) {
+          setProductServices([{
+            id: '1',
+            name: '',
+            target_audience: '',
+            benefits: '',
+            benefit_reason: '',
+            basic_info: ''
+          }]);
+        }
         
         setLoading(false);
       } catch (err: any) {
@@ -192,7 +252,18 @@ export default function Home() {
       setProgress(100);
       setProgressMessage('ペルソナ生成完了');
       setPersonas(response.personas);
-      setStep(1);
+      
+      // 入力履歴をlocalStorageに保存
+      const updatedHistory = {
+        products_services: [...inputHistory.products_services, ...productServices].slice(-10), // 最新10件
+        competitors: [...inputHistory.competitors, ...competitors].slice(-10),
+        topics: [...inputHistory.topics, topic].filter((v, i, arr) => arr.indexOf(v) === i).slice(-10) // 重複削除
+      };
+      localStorage.setItem('input_history', JSON.stringify(updatedHistory));
+      setInputHistory(updatedHistory);
+      
+      // 自動では画面遷移しない（編集可能にするため）
+      // setStep(1); はユーザーが「次へ」ボタンを押した時のみ
     } catch (err: any) {
       const errorMessage = err.response?.data?.detail || err.message;
       
@@ -610,20 +681,51 @@ export default function Home() {
     }
   };
 
+  const handleExportPptx = async () => {
+    try {
+      setExportingPptx(true);
+      const blob = await apiClient.exportPptx(sessionId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tames_insight_report_${new Date().toISOString().slice(0, 10)}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('PPTX export error:', err);
+      setError('PowerPointレポートの生成に失敗しました。');
+    } finally {
+      setExportingPptx(false);
+    }
+  };
+
   const renderStep = () => {
     // ステップ進行状況を表示（ローディング中やエラー時は非表示）
     const showProgress = !loading && !error && connectionStatus === 'connected';
+  
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600">認証状態を確認中...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // 未ログイン時は何も表示しない（リダイレクト中）
+  if (!session) {
+    return null;
+  }
     
     switch (step) {
       case 0:
   return (
           <div className="max-w-4xl mx-auto space-y-8">
             {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                tames interview
-              </h1>
-            </div>
             
             {/* 履歴表示ボタン */}
             {interviewHistory.length > 0 && (
@@ -802,21 +904,21 @@ export default function Home() {
                   <input
                     type="checkbox"
                     checked={selectedAnalysisTypes.includes('market_structure')}
-                    onChange={(e) => {
+                  onChange={(e) => {
                       if (e.target.checked) {
                         setSelectedAnalysisTypes([...selectedAnalysisTypes, 'market_structure']);
                       } else {
                         setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'market_structure'));
-                      }
-                    }}
+                    }
+                  }}
                     className="mt-1 mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <div>
+              <div>
                     <span className="font-medium text-gray-900">1. 市場構造の理解</span>
                     <p className="text-sm text-gray-600 mt-1">
                       市場全体の動向、顧客セグメント、競合状況を把握し、ビジネスチャンスを見出す分析
-                    </p>
-                  </div>
+                </p>
+              </div>
                 </label>
                 
                 <label className="flex items-start p-3 bg-white border-2 border-blue-200 rounded-lg hover:border-blue-400 cursor-pointer transition">
@@ -832,12 +934,12 @@ export default function Home() {
                     }}
                     className="mt-1 mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <div>
+                        <div>
                     <span className="font-medium text-gray-900">2. ある特定の消費者ニーズの確認</span>
                     <p className="text-sm text-gray-600 mt-1">
                       特定の顧客層のニーズや課題を深掘りし、商品・サービスとのマッチングを検証する分析
-                    </p>
-                  </div>
+                          </p>
+                        </div>
                 </label>
                 
                 <label className="flex items-start p-3 bg-white border-2 border-blue-200 rounded-lg hover:border-blue-400 cursor-pointer transition">
@@ -849,8 +951,8 @@ export default function Home() {
                         setSelectedAnalysisTypes([...selectedAnalysisTypes, 'product_improvement']);
                       } else {
                         setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'product_improvement'));
-                      }
-                    }}
+                            }
+                          }}
                     className="mt-1 mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <div>
@@ -859,9 +961,9 @@ export default function Home() {
                       現在の商品・サービスの改善点を発見し、より魅力的な価値提案を作り上げる分析
                     </p>
                   </div>
-                </label>
-              </div>
-              
+              </label>
+            </div>
+
               {selectedAnalysisTypes.length === 0 && (
                 <p className="text-sm text-red-600 mt-2">
                   ※ 少なくとも1つの分析目的を選択してください
@@ -933,7 +1035,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex justify-center gap-4">
               <button
                 onClick={handleGeneratePersonas}
                 disabled={loading || !topic.trim() || selectedAnalysisTypes.length === 0 || productServices.some(p => 
@@ -944,7 +1046,25 @@ export default function Home() {
               >
                 {loading ? <LoadingSpinner size="sm" /> : 'インタビュー対象者を選定'}
               </button>
+              
+              {personas.length > 0 && !loading && (
+                <button
+                  onClick={() => setStep(1)}
+                  className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 font-medium flex items-center gap-2"
+                >
+                  <span>次へ</span>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
             </div>
+            
+            {personas.length > 0 && !loading && (
+              <div className="text-center text-sm text-green-600">
+                ✅ インタビュー対象者の選定が完了しました。内容を確認・編集してから「次へ」をクリックしてください。
+              </div>
+            )}
             
             {selectedAnalysisTypes.length === 0 && topic.trim() && (
               <div className="text-center text-sm text-red-600">
@@ -1151,6 +1271,8 @@ export default function Home() {
                    onAdditionalInterview={() => setShowAdditionalQuestionDialog(true)}
                    loading={loading}
                    forceActiveTab={forceActiveTab}
+                   onExportPptx={handleExportPptx}
+                   exportingPptx={exportingPptx}
                  />
 
                 {/* 追加質問ダイアログ */}
@@ -1441,64 +1563,61 @@ export default function Home() {
     }
   };
 
-  // 初期ロード画面
   if (loading && step === 0 && connectionStatus === 'connecting') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" />
-          <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-2">
-            tames interview
-          </h1>
-          <p className="text-gray-600">
-            {connectionStatus === 'connecting' ? 'サーバーに接続中...' : 'アプリケーションを初期化中...'}
-          </p>
-          {connectionStatus === 'error' && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800">{error}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                ページを再読み込み
-              </button>
-            </div>
-          )}
+      <div className="flex min-h-screen">
+        <Sidebar connectionStatus={connectionStatus} />
+        <div className="ml-56 flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-3 border-blue-600 border-t-transparent" />
+            <h1 className="text-xl font-semibold text-gray-900 mt-4 mb-1">AI Interview</h1>
+            <p className="text-sm text-gray-500">
+              {connectionStatus === 'connecting' ? 'サーバーに接続中...' : 'アプリケーションを初期化中...'}
+            </p>
+            {connectionStatus === 'error' && (
+              <div className="mt-4 p-4 rounded-lg border border-red-200 bg-red-50">
+                <p className="text-sm text-red-800">{error}</p>
+                <button onClick={() => window.location.reload()} className="mt-2 btn-primary text-sm">
+                  再読み込み
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="flex min-h-screen bg-[var(--background)]">
+      <Sidebar currentStep={step} connectionStatus={connectionStatus} />
+      <main className="ml-56 flex-1 py-8 px-6 lg:px-10">
+        <div className="max-w-7xl mx-auto">
 
-        {/* 進行状況表示（ロード中のとき） */}
-        {loading && progress > 0 && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="mb-2 flex justify-between items-center">
-              <span className="text-sm font-medium text-blue-700">{progressMessage}</span>
-              <span className="text-sm text-blue-600">{progress}%</span>
+          {loading && progress > 0 && (
+            <div className="mb-6 card p-4">
+              <div className="mb-2 flex justify-between items-center">
+                <span className="text-sm font-medium text-blue-600">{progressMessage}</span>
+                <span className="text-sm text-gray-500">{progress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div 
+                  className="h-1.5 rounded-full bg-blue-600 transition-all duration-300 ease-out" 
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
-            <div className="w-full bg-blue-200 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out" 
-                style={{ width: `${progress}%` }}
-              ></div>
+          )}
+
+          {error && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+              <p className="text-sm text-red-800">{error}</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* エラー表示 */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800">{error}</p>
-          </div>
-        )}
-
-        {/* メインコンテンツ */}
-        {renderStep()}
-      </div>
+          {renderStep()}
+        </div>
+      </main>
     </div>
   );
 }

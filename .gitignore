@@ -3,6 +3,8 @@
 .env.local
 .env.*.local
 *.env
+.env.backup*
+setup-oauth-env*
 
 # SSL証明書（機密情報）
 certs/

@@ -1,0 +1,484 @@
+# -*- coding: utf-8 -*-
+"""
+マーケティングインサイト PowerPoint レポート生成
+"""
+
+from pptx import Presentation
+from pptx.util import Inches, Pt, Emu
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.shapes import MSO_SHAPE
+import io
+import re
+import logging
+from datetime import datetime
+from typing import List, Dict, Optional
+
+logger = logging.getLogger(__name__)
+
+# tames ブランドカラー
+TAMES_PRIMARY = RGBColor(0x25, 0x63, 0xEB)
+TAMES_PRIMARY_DARK = RGBColor(0x1D, 0x4E, 0xD8)
+TAMES_ACCENT = RGBColor(0x06, 0xB6, 0xD4)
+WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+DARK = RGBColor(0x0F, 0x17, 0x2A)
+MUTED = RGBColor(0x64, 0x74, 0x8B)
+LIGHT_BG = RGBColor(0xF8, 0xFA, 0xFC)
+SUCCESS = RGBColor(0x10, 0xB9, 0x81)
+WARNING = RGBColor(0xF5, 0x9E, 0x0B)
+
+SLIDE_WIDTH = Inches(13.333)
+SLIDE_HEIGHT = Inches(7.5)
+
+
+def _add_gradient_bg(slide, color1: RGBColor, color2: RGBColor):
+    """スライド背景にグラデーションを設定"""
+    bg = slide.background
+    fill = bg.fill
+    fill.gradient()
+    fill.gradient_stops[0].color.rgb = color1
+    fill.gradient_stops[0].position = 0.0
+    fill.gradient_stops[1].color.rgb = color2
+    fill.gradient_stops[1].position = 1.0
+
+
+def _add_shape_with_text(
+    slide,
+    left,
+    top,
+    width,
+    height,
+    text: str,
+    font_size: int = 12,
+    font_color: RGBColor = DARK,
+    bold: bool = False,
+    fill_color: Optional[RGBColor] = None,
+    alignment=PP_ALIGN.LEFT,
+    shape_type=MSO_SHAPE.ROUNDED_RECTANGLE,
+):
+    """テキスト付きの図形を追加"""
+    shape = slide.shapes.add_shape(shape_type, left, top, width, height)
+
+    if fill_color:
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = fill_color
+    else:
+        shape.fill.background()
+
+    shape.line.fill.background()
+
+    tf = shape.text_frame
+    tf.word_wrap = True
+    tf.auto_size = None
+    tf.margin_left = Inches(0.15)
+    tf.margin_right = Inches(0.15)
+    tf.margin_top = Inches(0.1)
+    tf.margin_bottom = Inches(0.1)
+
+    para = tf.paragraphs[0]
+    para.text = text
+    para.font.size = Pt(font_size)
+    para.font.color.rgb = font_color
+    para.font.bold = bold
+    para.alignment = alignment
+    return shape
+
+
+def _add_text_box(slide, left, top, width, height, text, font_size=12, font_color=DARK, bold=False, alignment=PP_ALIGN.LEFT):
+    """テキストボックスを追加"""
+    txBox = slide.shapes.add_textbox(left, top, width, height)
+    tf = txBox.text_frame
+    tf.word_wrap = True
+    tf.auto_size = None
+    tf.margin_left = Inches(0)
+    tf.margin_right = Inches(0)
+
+    para = tf.paragraphs[0]
+    para.text = text
+    para.font.size = Pt(font_size)
+    para.font.color.rgb = font_color
+    para.font.bold = bold
+    para.alignment = alignment
+    return txBox
+
+
+def _add_multiline_textbox(slide, left, top, width, height, lines: List[Dict], line_spacing=1.2):
+    """複数行のテキストボックス。各行は {"text": str, "size": int, "color": RGBColor, "bold": bool} """
+    txBox = slide.shapes.add_textbox(left, top, width, height)
+    tf = txBox.text_frame
+    tf.word_wrap = True
+    tf.auto_size = None
+
+    for i, line_info in enumerate(lines):
+        if i == 0:
+            para = tf.paragraphs[0]
+        else:
+            para = tf.add_paragraph()
+        para.text = line_info.get("text", "")
+        para.font.size = Pt(line_info.get("size", 12))
+        para.font.color.rgb = line_info.get("color", DARK)
+        para.font.bold = line_info.get("bold", False)
+        para.space_after = Pt(line_info.get("space_after", 4))
+        para.alignment = line_info.get("alignment", PP_ALIGN.LEFT)
+    return txBox
+
+
+def _build_cover_slide(prs: Presentation, topic: str, products: List[Dict], date_str: str):
+    """表紙スライド"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank
+    _add_gradient_bg(slide, TAMES_PRIMARY, TAMES_PRIMARY_DARK)
+
+    # tames logo placeholder
+    _add_shape_with_text(
+        slide, Inches(0.8), Inches(0.6), Inches(1.2), Inches(0.5),
+        "tames", font_size=20, font_color=WHITE, bold=True,
+        fill_color=None, alignment=PP_ALIGN.LEFT,
+    )
+
+    # Title
+    _add_text_box(
+        slide, Inches(0.8), Inches(2.0), Inches(11), Inches(1.0),
+        "Marketing Insight Report", font_size=36, font_color=WHITE, bold=True,
+    )
+
+    # Topic
+    _add_text_box(
+        slide, Inches(0.8), Inches(3.2), Inches(11), Inches(0.6),
+        topic, font_size=20, font_color=RGBColor(0xBF, 0xDB, 0xFE),
+    )
+
+    # Products
+    product_names = ", ".join([p.get("name", "") for p in products]) if products else ""
+    if product_names:
+        _add_text_box(
+            slide, Inches(0.8), Inches(4.0), Inches(11), Inches(0.5),
+            f"対象: {product_names}", font_size=14, font_color=RGBColor(0x93, 0xC5, 0xFD),
+        )
+
+    # Date
+    _add_text_box(
+        slide, Inches(0.8), Inches(6.2), Inches(4), Inches(0.4),
+        date_str, font_size=12, font_color=RGBColor(0x93, 0xC5, 0xFD),
+    )
+
+    # Footer
+    _add_text_box(
+        slide, Inches(0.8), Inches(6.7), Inches(4), Inches(0.3),
+        "Generated by tames interview — Powered by Google Gemini",
+        font_size=9, font_color=RGBColor(0x93, 0xC5, 0xFD),
+    )
+
+
+def _build_section_slide(prs: Presentation, title: str, subtitle: str = ""):
+    """セクション区切りスライド"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = LIGHT_BG
+
+    _add_shape_with_text(
+        slide, Inches(0.8), Inches(0), Inches(11.5), Inches(0.08),
+        "", fill_color=TAMES_PRIMARY,
+    )
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(2.8), Inches(11), Inches(0.8),
+        title, font_size=32, font_color=DARK, bold=True, alignment=PP_ALIGN.LEFT,
+    )
+
+    if subtitle:
+        _add_text_box(
+            slide, Inches(0.8), Inches(3.8), Inches(11), Inches(0.5),
+            subtitle, font_size=14, font_color=MUTED,
+        )
+
+
+def _build_executive_summary_slide(prs: Presentation, analysis_text: str):
+    """エグゼクティブサマリスライド"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = WHITE
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(0.5), Inches(6), Inches(0.5),
+        "Executive Summary", font_size=24, font_color=DARK, bold=True,
+    )
+
+    _add_shape_with_text(
+        slide, Inches(0.8), Inches(1.0), Inches(11.5), Inches(0.04),
+        "", fill_color=TAMES_ACCENT,
+    )
+
+    summary_lines = _extract_key_points(analysis_text, max_points=5)
+    summary_text = "\n".join([f"  {line}" for line in summary_lines])
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5),
+        summary_text, font_size=13, font_color=DARK,
+    )
+
+
+def _build_persona_slide(prs: Presentation, personas: List[Dict]):
+    """ペルソナ一覧スライド"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = WHITE
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(0.5), Inches(6), Inches(0.5),
+        "Interview Personas", font_size=24, font_color=DARK, bold=True,
+    )
+    _add_shape_with_text(
+        slide, Inches(0.8), Inches(1.0), Inches(11.5), Inches(0.04),
+        "", fill_color=TAMES_ACCENT,
+    )
+
+    card_width = Inches(3.5)
+    card_height = Inches(4.5)
+    margin = Inches(0.4)
+    start_left = Inches(0.8)
+    start_top = Inches(1.5)
+
+    for i, persona in enumerate(personas[:3]):
+        col = i % 3
+        left = start_left + col * (card_width + margin)
+        top = start_top
+
+        # Card background
+        card = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE, left, top, card_width, card_height,
+        )
+        card.fill.solid()
+        card.fill.fore_color.rgb = LIGHT_BG
+        card.line.fill.background()
+
+        name = persona.get("name", f"Persona {i+1}")
+        details = persona.get("details", {})
+
+        _add_text_box(
+            slide, left + Inches(0.2), top + Inches(0.2), card_width - Inches(0.4), Inches(0.4),
+            name, font_size=14, font_color=TAMES_PRIMARY, bold=True,
+        )
+
+        detail_lines = []
+        for key in ["年齢", "性別", "職業", "年収帯", "居住地", "家族構成", "趣味・余暇", "関心事・悩み"]:
+            val = details.get(key, "")
+            if val:
+                detail_lines.append({"text": f"{key}: {val}", "size": 10, "color": DARK, "space_after": 3})
+
+        if detail_lines:
+            _add_multiline_textbox(
+                slide,
+                left + Inches(0.2), top + Inches(0.7),
+                card_width - Inches(0.4), card_height - Inches(0.9),
+                detail_lines,
+            )
+
+
+def _build_analysis_slide(prs: Presentation, title: str, content: str):
+    """分析結果スライド（テキストを自動分割）"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = WHITE
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(0.5), Inches(10), Inches(0.5),
+        title, font_size=20, font_color=DARK, bold=True,
+    )
+    _add_shape_with_text(
+        slide, Inches(0.8), Inches(1.0), Inches(11.5), Inches(0.04),
+        "", fill_color=TAMES_PRIMARY,
+    )
+
+    cleaned = _clean_markdown(content)
+    _add_text_box(
+        slide, Inches(0.8), Inches(1.3), Inches(11.5), Inches(5.7),
+        cleaned[:2000], font_size=11, font_color=DARK,
+    )
+
+
+def _build_strategy_slide(prs: Presentation, content: str):
+    """戦略提案スライド"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = WHITE
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(0.5), Inches(10), Inches(0.5),
+        "Marketing Strategy Recommendations", font_size=20, font_color=DARK, bold=True,
+    )
+    _add_shape_with_text(
+        slide, Inches(0.8), Inches(1.0), Inches(11.5), Inches(0.04),
+        "", fill_color=SUCCESS,
+    )
+
+    cleaned = _clean_markdown(content)
+    _add_text_box(
+        slide, Inches(0.8), Inches(1.3), Inches(11.5), Inches(5.7),
+        cleaned[:2000], font_size=11, font_color=DARK,
+    )
+
+
+def _build_closing_slide(prs: Presentation):
+    """クロージングスライド"""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_gradient_bg(slide, TAMES_PRIMARY, TAMES_PRIMARY_DARK)
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(2.5), Inches(11.5), Inches(1.0),
+        "Thank You", font_size=40, font_color=WHITE, bold=True, alignment=PP_ALIGN.CENTER,
+    )
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(3.8), Inches(11.5), Inches(0.5),
+        "このレポートはtames interviewにより自動生成されました",
+        font_size=14, font_color=RGBColor(0xBF, 0xDB, 0xFE), alignment=PP_ALIGN.CENTER,
+    )
+
+    _add_text_box(
+        slide, Inches(0.8), Inches(6.5), Inches(11.5), Inches(0.3),
+        "tames — Marketing Intelligence Platform",
+        font_size=10, font_color=RGBColor(0x93, 0xC5, 0xFD), alignment=PP_ALIGN.CENTER,
+    )
+
+
+# --- ヘルパー ---
+
+def _clean_markdown(text: str) -> str:
+    """Markdownの装飾を除去"""
+    text = re.sub(r'#{1,6}\s*', '', text)
+    text = re.sub(r'\*{1,3}(.+?)\*{1,3}', r'\1', text)
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    text = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', text)
+    return text.strip()
+
+
+def _extract_key_points(text: str, max_points: int = 5) -> List[str]:
+    """テキストから主要ポイントを抽出"""
+    cleaned = _clean_markdown(text)
+    lines = [l.strip() for l in cleaned.split('\n') if l.strip() and len(l.strip()) > 10]
+
+    points = []
+    for line in lines:
+        line = re.sub(r'^[-•*]\s*', '', line)
+        line = re.sub(r'^\d+[\.．]\s*', '', line)
+        if line and len(line) > 10:
+            points.append(line)
+        if len(points) >= max_points:
+            break
+
+    return points if points else lines[:max_points]
+
+
+def _split_analysis_sections(analysis_text: str) -> Dict[str, str]:
+    """分析テキストをセクション別に分割"""
+    sections = {}
+    current_title = "概要"
+    current_content = []
+
+    for line in analysis_text.split('\n'):
+        heading_match = re.match(r'^#{1,3}\s*\d*\.?\s*(.+)', line)
+        if heading_match:
+            if current_content:
+                sections[current_title] = '\n'.join(current_content)
+            current_title = heading_match.group(1).strip()
+            current_content = []
+        else:
+            current_content.append(line)
+
+    if current_content:
+        sections[current_title] = '\n'.join(current_content)
+
+    return sections
+
+
+# --- パブリック API ---
+
+def generate_report(
+    topic: str,
+    products: List[Dict],
+    personas: List[Dict],
+    analysis_text: str,
+    custom_analysis: Optional[Dict[str, str]] = None,
+    final_analysis: Optional[str] = None,
+    summaries: Optional[List[Dict]] = None,
+    presenter_notes: Optional[str] = None,
+) -> bytes:
+    """
+    マーケティングインサイトレポートのPowerPointを生成し、バイト列で返す。
+    """
+    prs = Presentation()
+    prs.slide_width = SLIDE_WIDTH
+    prs.slide_height = SLIDE_HEIGHT
+
+    date_str = datetime.now().strftime("%Y年%m月%d日")
+
+    # 1. 表紙
+    _build_cover_slide(prs, topic, products, date_str)
+
+    # 2. エグゼクティブサマリ
+    source_text = final_analysis or analysis_text
+    _build_executive_summary_slide(prs, source_text)
+
+    # 3. ペルソナ
+    if personas:
+        _build_section_slide(prs, "Personas", "インタビュー対象者の概要")
+        _build_persona_slide(prs, personas)
+
+    # 4. ペルソナ別サマリ
+    if summaries:
+        _build_section_slide(prs, "Interview Summaries", "各ペルソナのインタビュー結果")
+        for s in summaries:
+            persona_name = s.get("persona_name", "")
+            full_summary = s.get("full_summary", s.get("main_findings", ""))
+            _build_analysis_slide(prs, f"Summary: {persona_name}", full_summary)
+
+    # 5. インサイト分析
+    if analysis_text:
+        sections = _split_analysis_sections(analysis_text)
+        if sections:
+            _build_section_slide(prs, "Insight Analysis", "インタビューから得られたインサイト")
+            for title, content in list(sections.items())[:8]:
+                _build_analysis_slide(prs, title, content)
+
+    # 6. カスタム分析
+    if custom_analysis:
+        type_labels = {
+            "market_structure": "市場構造の理解",
+            "customer_needs": "消費者ニーズの確認",
+            "product_improvement": "商品・サービスのブラッシュアップ",
+            "target_analysis": "ターゲット分析",
+            "improvement_analysis": "改善分析",
+        }
+        _build_section_slide(prs, "Deep Analysis", "詳細分析レポート")
+        for key, content in custom_analysis.items():
+            label = type_labels.get(key, key)
+            _build_analysis_slide(prs, label, content)
+
+    # 7. 最終分析・戦略
+    if final_analysis:
+        strategy_sections = _split_analysis_sections(final_analysis)
+        strategy_content = ""
+        for title, content in strategy_sections.items():
+            if "戦略" in title or "示唆" in title or "マーケティング" in title:
+                strategy_content = content
+                break
+        if strategy_content:
+            _build_strategy_slide(prs, strategy_content)
+
+    # 8. クロージング
+    _build_closing_slide(prs)
+
+    # プレゼンターノート
+    if presenter_notes:
+        for slide_obj in prs.slides:
+            if not slide_obj.has_notes_slide:
+                notes_slide = slide_obj.notes_slide
+            else:
+                notes_slide = slide_obj.notes_slide
+            if notes_slide.notes_text_frame.text == "":
+                notes_slide.notes_text_frame.text = presenter_notes[:500]
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+    return buf.read()

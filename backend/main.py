@@ -3,7 +3,7 @@
 マーケティングインタビューシステム - FastAPI バックエンド
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -18,6 +18,13 @@ import pandas as pd
 import json
 from datetime import datetime
 import uuid
+import io
+
+# データベースと認証
+from database import get_db, User, Project, Persona, Interview, Analysis, InterviewSessionDB
+from auth import get_current_user, get_optional_user, create_or_update_user
+from sqlalchemy.orm import Session
+import db_manager
 
 # 環境変数を読み込み
 load_dotenv()
@@ -38,15 +45,37 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS設定 - 外部デバイスからのアクセスを許可
+# CORS設定 - 環境変数から許可オリジンを取得
+_default_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+]
+_extra_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if _extra_origins:
+    _default_origins.extend([o.strip().rstrip("/") for o in _extra_origins.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 全てのオリジンを許可
-    allow_credentials=False,  # 全オリジン許可時はcredentialsをFalseに
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],  # レスポンスヘッダーの公開を許可
+    allow_origins=_default_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+    max_age=3600,
 )
+
+# レート制限（グローバル: 1IPあたり60リクエスト/分）
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["60/minute"],
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- APIキーの設定 ---
 try:
@@ -124,17 +153,35 @@ class HistoryRecord(BaseModel):
     personas_used: List[str]
 
 # --- グローバル変数 ---
-current_session = {
-    "personas": [],
-    "selected_personas": [],
-    "interview_sessions": {},
-    "total_input_chars": 0,
-    "total_output_chars": 0,
-    "start_time": time.time(),
-    "project_info": None,
-    "custom_questions": [],
-    "analysis_types": []  # 選択された分析タイプ
-}
+# マルチセッション対応: セッションIDをキーとした辞書で管理
+sessions = {}
+
+# セッションのデフォルト構造
+def create_new_session():
+    """新しいセッションを作成する"""
+    return {
+        "personas": [],
+        "selected_personas": [],
+        "interview_sessions": {},
+        "total_input_chars": 0,
+        "total_output_chars": 0,
+        "start_time": time.time(),
+        "project_info": None,
+        "custom_questions": [],
+        "analysis_types": [],  # 選択された分析タイプ
+        "input_history": {  # 過去の入力履歴
+            "products_services": [],
+            "competitors": [],
+            "topics": []
+        }
+    }
+
+def get_session(session_id: str):
+    """セッションを取得（存在しない場合は作成）"""
+    if session_id not in sessions:
+        sessions[session_id] = create_new_session()
+        logger.info(f"新しいセッションを作成: {session_id}")
+    return sessions[session_id]
 
 # 履歴保存用（実際のプロダクションではデータベースを使用）
 interview_history = []
@@ -145,7 +192,7 @@ def to_text(text):
     text = text.replace('•', ' *')
     return textwrap.dedent(text)
 
-def generate_text(prompt, model_name="models/gemini-2.5-flash-lite", temperature=0.8, max_retries=3):
+def generate_text(prompt, model_name="models/gemini-2.5-flash-lite", temperature=0.8, max_retries=3, session_id=None):
     """指定されたプロンプトと設定でテキストを生成する関数（リトライ機能付き）"""
     retry_count = 0
     last_error = None
@@ -158,9 +205,12 @@ def generate_text(prompt, model_name="models/gemini-2.5-flash-lite", temperature
                 generation_config=genai.types.GenerationConfig(temperature=temperature)
             )
             
-            current_session["total_input_chars"] += len(prompt)
-            if response.text:
-                current_session["total_output_chars"] += len(response.text)
+            # セッションIDが指定されている場合は、そのセッションの統計を更新
+            if session_id:
+                session = get_session(session_id)
+                session["total_input_chars"] += len(prompt)
+                if response.text:
+                    session["total_output_chars"] += len(response.text)
             
             return response.text
         except Exception as e:
@@ -301,12 +351,196 @@ async def root():
     """ルートエンドポイント"""
     return {"message": "マーケティングインタビューシステム API"}
 
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """OPTIONSリクエスト（CORSプリフライト）を処理"""
+    return {"message": "OK"}
+
+# --- 認証エンドポイント ---
+
+class GoogleSignInRequest(BaseModel):
+    id: str
+    email: str
+    name: Optional[str] = None
+    picture: Optional[str] = None
+
+@app.post("/api/auth/google-signin")
+async def google_signin(request: GoogleSignInRequest, db: Session = Depends(get_db)):
+    """Google認証後のユーザー登録/更新エンドポイント"""
+    try:
+        user = create_or_update_user(
+            user_id=request.id,
+            email=request.email,
+            name=request.name,
+            picture=request.picture,
+            db=db
+        )
+        
+        return {
+            "message": "ユーザー登録/更新成功",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "picture": user.picture
+            }
+        }
+    except Exception as e:
+        logger.error(f"Google認証エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auth/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """現在のユーザー情報を取得"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "picture": current_user.picture,
+        "created_at": current_user.created_at
+    }
+
+@app.get("/api/user/projects")
+async def get_user_projects(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """ユーザーのプロジェクト一覧を取得"""
+    try:
+        projects = db_manager.get_user_projects(current_user, db, limit=20)
+        
+        projects_list = []
+        for project in projects:
+            # 各プロジェクトのペルソナ数とインタビュー数を取得
+            personas_count = len(db_manager.get_project_personas(project.id, db))
+            interviews_count = len(db_manager.get_project_interviews(project.id, db))
+            
+            projects_list.append({
+                "id": project.id,
+                "topic": project.topic,
+                "products_count": len(project.products_services) if project.products_services else 0,
+                "personas_count": personas_count,
+                "interviews_count": interviews_count,
+                "created_at": project.created_at.isoformat(),
+                "analysis_types": project.analysis_types
+            })
+        
+        return {"projects": projects_list}
+    except Exception as e:
+        logger.error(f"プロジェクト一覧取得エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/user/statistics")
+async def get_user_statistics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """ユーザーの統計情報を取得"""
+    try:
+        stats = db_manager.get_user_statistics(current_user, db)
+        return stats
+    except Exception as e:
+        logger.error(f"統計情報取得エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/input-history")
+async def get_input_history(session_id: str = "default"):
+    """過去の入力履歴を取得するエンドポイント"""
+    try:
+        session = get_session(session_id)
+        return {
+            "products_services": session["input_history"]["products_services"][-10:],  # 最新10件
+            "competitors": session["input_history"]["competitors"][-10:],
+            "topics": session["input_history"]["topics"][-10:]
+        }
+    except Exception as e:
+        logger.error(f"入力履歴取得エラー: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/analyze-psychology")
+async def analyze_psychology(
+    persona_context: str,
+    user_message: str,
+    persona_response: str,
+    session_id: str = "default"
+):
+    """発言から深層心理を分析するエンドポイント"""
+    try:
+        psychology_prompt = f"""
+あなたは心理学とマーケティングの専門家です。
+以下のインタビュー対象者の発言から、その深層心理（本当は何を考えているか、何を感じているか）を分析してください。
+
+【インタビュー対象者の背景】
+{persona_context}
+
+【インタビュアーの質問】
+{user_message}
+
+【インタビュー対象者の回答】
+{persona_response}
+
+以下の観点から深層心理を分析してください：
+
+1. **表面的な発言の裏にある本音**
+   - 言葉では言っていないが、実際には感じているであろうこと
+   - 遠慮している、または意識していない潜在的なニーズ
+
+2. **感情的な動機**
+   - この発言の背後にある感情（不安、期待、満足、不満など）
+   - なぜそのように感じるのか（過去の経験、価値観など）
+
+3. **購買行動への影響**
+   - この心理状態が商品・サービスの選択にどう影響するか
+   - 意思決定の際に重視する隠れた基準
+
+4. **マーケティング上の示唆**
+   - この深層心理から見えるマーケティング機会
+   - どのようなアプローチが効果的か
+
+【出力形式】
+以下の形式で簡潔に出力してください（各項目100文字以内）：
+
+🧠 本音: [表面的な発言の裏にある本当の気持ち]
+💭 感情: [背後にある感情とその理由]
+🎯 購買影響: [この心理が購買行動に与える影響]
+💡 示唆: [マーケティング上の重要な示唆]
+"""
+        
+        psychology_analysis = generate_text(
+            psychology_prompt,
+            temperature=0.7,
+            session_id=session_id
+        )
+        
+        return {"psychology_analysis": psychology_analysis}
+        
+    except Exception as e:
+        logger.error(f"深層心理分析エラー: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/generate-personas")
-async def generate_personas(request: PersonaGenerationRequest):
+async def generate_personas(request: PersonaGenerationRequest, session_id: str = "default"):
     """ペルソナを生成するエンドポイント"""
     try:
+        # セッションを取得
+        session = get_session(session_id)
+        
         # セッションにプロジェクト情報を保存
-        current_session["project_info"] = request.project_info
+        session["project_info"] = request.project_info
+        
+        # 入力履歴に追加（重複を避ける）
+        if request.project_info.products_services:
+            for product in request.project_info.products_services:
+                if product.dict() not in session["input_history"]["products_services"]:
+                    session["input_history"]["products_services"].append(product.dict())
+        
+        if request.project_info.competitors:
+            for competitor in request.project_info.competitors:
+                if competitor.dict() not in session["input_history"]["competitors"]:
+                    session["input_history"]["competitors"].append(competitor.dict())
+        
+        if request.project_info.topic and request.project_info.topic not in session["input_history"]["topics"]:
+            session["input_history"]["topics"].append(request.project_info.topic)
         
         # 商品・サービス情報を含むプロンプトを作成
         products_info = ""
@@ -371,14 +605,14 @@ async def generate_personas(request: PersonaGenerationRequest):
         - 各項目は簡潔に記述してください
         """
         
-        personas_text = generate_text(persona_prompt)
+        personas_text = generate_text(persona_prompt, session_id=session_id)
         logger.info(f"生成されたペルソナテキスト: {personas_text[:500]}...")
         
         personas = parse_personas(personas_text)
         logger.info(f"パースされたペルソナ数: {len(personas)}")
         
-        current_session["personas"] = personas
-        current_session["start_time"] = time.time()
+        session["personas"] = personas
+        session["start_time"] = time.time()
         
         # レスポンス用のペルソナデータを準備
         persona_list = []
@@ -404,9 +638,10 @@ async def generate_personas(request: PersonaGenerationRequest):
         raise HTTPException(status_code=500, detail=f"ペルソナ生成に失敗しました: {e}")
 
 @app.post("/api/set-analysis-types")
-async def set_analysis_types(request: AnalysisTypeRequest):
+async def set_analysis_types(request: AnalysisTypeRequest, session_id: str = "default"):
     """分析タイプを設定するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         current_session["analysis_types"] = request.analysis_types
         return {
             "analysis_types": request.analysis_types,
@@ -417,9 +652,10 @@ async def set_analysis_types(request: AnalysisTypeRequest):
         raise HTTPException(status_code=500, detail=f"分析タイプの設定に失敗しました: {e}")
 
 @app.post("/api/select-personas")
-async def select_personas(request: PersonaSelectionRequest):
+async def select_personas(request: PersonaSelectionRequest, session_id: str = "default"):
     """ペルソナを選択するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["personas"]:
             raise HTTPException(status_code=400, detail="ペルソナが生成されていません")
         
@@ -495,8 +731,9 @@ async def select_personas(request: PersonaSelectionRequest):
         raise HTTPException(status_code=500, detail=f"ペルソナ選択に失敗しました: {e}")
 
 @app.get("/api/default-questions")
-async def get_default_questions(topic: Optional[str] = None):
+async def get_default_questions(topic: Optional[str] = None, session_id: str = "default"):
     """デフォルトの質問リストを取得するエンドポイント"""
+    current_session = get_session(session_id)
     
     # カスタム質問がある場合はそれを返す
     if current_session.get("custom_questions"):
@@ -698,9 +935,10 @@ async def get_default_questions(topic: Optional[str] = None):
         return {"questions": fallback_questions}
 
 @app.post("/api/conduct-interview")
-async def conduct_interview(request: InterviewRequest):
+async def conduct_interview(request: InterviewRequest, session_id: str = "default"):
     """インタビューを実行するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="ペルソナが選択されていません")
         
@@ -715,9 +953,35 @@ async def conduct_interview(request: InterviewRequest):
             response = chat.send_message(f"次の質問に簡潔に2-3文で回答してください：{question}")
             main_answer = response.text
             
+            # メイン回答の深層心理分析
+            psychology_analysis = None
+            try:
+                psychology_prompt = f"""
+あなたは心理学とマーケティングの専門家です。
+以下のインタビュー対象者の発言から、その深層心理を分析してください。
+
+【インタビュー対象者の背景】
+{persona.raw_text}
+
+【質問】{question}
+【回答】{main_answer}
+
+以下の観点から簡潔に分析してください（各50-80文字）：
+
+🧠 本音: [表面的な発言の裏にある本当の気持ち]
+💭 感情: [背後にある感情とその理由]
+🎯 購買影響: [この心理が購買行動に与える影響]
+💡 示唆: [マーケティング上の重要な示唆]
+"""
+                psychology_analysis = generate_text(psychology_prompt, temperature=0.7)
+            except Exception as e:
+                logger.warning(f"深層心理分析エラー: {e}")
+                # エラーが発生してもインタビューは継続
+            
             question_result = {
                 "question": question,
                 "main_answer": main_answer,
+                "psychology_analysis": psychology_analysis,
                 "follow_ups": []
             }
             
@@ -765,9 +1029,10 @@ async def conduct_interview(request: InterviewRequest):
         raise HTTPException(status_code=500, detail=f"インタビューの実行に失敗しました: {str(e)}")
 
 @app.post("/api/generate-analysis")
-async def generate_analysis():
+async def generate_analysis(session_id: str = "default"):
     """インサイト分析を生成するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="インタビューデータがありません")
         
@@ -930,9 +1195,10 @@ async def generate_analysis():
         raise HTTPException(status_code=500, detail=f"分析の生成に失敗しました: {str(e)}")
 
 @app.post("/api/generate-hypothesis")
-async def generate_hypothesis():
+async def generate_hypothesis(session_id: str = "default"):
     """初回インタビュー結果から仮説と追加質問を生成するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="インタビューデータがありません")
         
@@ -1080,9 +1346,10 @@ async def generate_hypothesis():
         raise HTTPException(status_code=500, detail=f"仮説の生成に失敗しました: {e}")
 
 @app.post("/api/conduct-hypothesis-interview")
-async def conduct_hypothesis_interview(request: InterviewRequest):
+async def conduct_hypothesis_interview(request: InterviewRequest, session_id: str = "default"):
     """追加インタビューを実行するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="ペルソナが選択されていません")
         
@@ -1147,9 +1414,10 @@ async def conduct_hypothesis_interview(request: InterviewRequest):
         raise HTTPException(status_code=500, detail=f"追加インタビューの実行に失敗しました: {str(e)}")
 
 @app.post("/api/generate-custom-final-analysis")
-async def generate_custom_final_analysis():
+async def generate_custom_final_analysis(session_id: str = "default"):
     """選択された分析タイプに基づく最終分析を生成するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="インタビューデータがありません")
         
@@ -1393,9 +1661,10 @@ async def generate_custom_final_analysis():
         raise HTTPException(status_code=500, detail=f"カスタム最終分析の生成に失敗しました: {e}")
 
 @app.post("/api/generate-final-analysis")
-async def generate_final_analysis():
+async def generate_final_analysis(session_id: str = "default"):
     """最終的なマーケティング戦略分析を生成するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="インタビューデータがありません")
         
@@ -1553,8 +1822,9 @@ async def generate_final_analysis():
         raise HTTPException(status_code=500, detail=f"最終分析の生成に失敗しました: {e}")
 
 @app.get("/api/session-status")
-async def get_session_status():
+async def get_session_status(session_id: str = "default"):
     """現在のセッション状態を取得するエンドポイント"""
+    current_session = get_session(session_id)
     return {
         "has_personas": len(current_session["personas"]) > 0,
         "has_selected_personas": len(current_session["selected_personas"]) > 0,
@@ -1565,9 +1835,10 @@ async def get_session_status():
     }
 
 @app.post("/api/upload-excel-questions")
-async def upload_excel_questions(file: UploadFile = File(...)):
+async def upload_excel_questions(file: UploadFile = File(...), session_id: str = "default"):
     """Excelファイルから質問を読み取るエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not file.filename.endswith(('.xlsx', '.xls')):
             raise HTTPException(status_code=400, detail="Excelファイル (.xlsx, .xls) のみ対応しています")
         
@@ -1601,9 +1872,10 @@ async def upload_excel_questions(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Excelファイルの読み取りに失敗しました: {e}")
 
 @app.post("/api/save-interview-history")
-async def save_interview_history():
+async def save_interview_history(session_id: str = "default"):
     """インタビュー結果を履歴に保存するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session.get("project_info"):
             raise HTTPException(status_code=400, detail="プロジェクト情報がありません")
         
@@ -1724,9 +1996,10 @@ async def get_interview_history_detail(history_id: str):
         raise HTTPException(status_code=500, detail=f"履歴詳細の取得に失敗しました: {e}")
 
 @app.post("/api/generate-interview-summary")
-async def generate_interview_summary():
+async def generate_interview_summary(session_id: str = "default"):
     """各ペルソナのインタビュー結果からサマリを生成するエンドポイント"""
     try:
+        current_session = get_session(session_id)
         if not current_session["selected_personas"]:
             raise HTTPException(status_code=400, detail="インタビューデータがありません")
         
@@ -1737,55 +2010,112 @@ async def generate_interview_summary():
             if not session or not session.get("history"):
                 continue
             
-            # インタビュー内容を要約
+            # インタビュー内容を整理（発言と深層心理を含める）
             interview_content = ""
+            key_quotes = []  # 重要な発言を収集
+            psychology_insights = []  # 深層心理の洞察を収集
+            
             for result in session["history"]:
                 interview_content += f"質問: {result['question']}\n"
                 interview_content += f"回答: {result['main_answer']}\n"
+                
+                # 重要な発言として保存
+                key_quotes.append({
+                    "question": result['question'],
+                    "answer": result['main_answer']
+                })
+                
+                # 深層心理があれば追加
+                if result.get('psychology_analysis'):
+                    interview_content += f"深層心理分析: {result['psychology_analysis']}\n"
+                    psychology_insights.append(result['psychology_analysis'])
+                
                 for follow_up in result.get('follow_ups', []):
                     interview_content += f"更問: {follow_up['question']}\n"
                     interview_content += f"更問回答: {follow_up['answer']}\n"
+                    
+                    # フォローアップの深層心理があれば追加
+                    if follow_up.get('psychology_analysis'):
+                        interview_content += f"深層心理分析: {follow_up['psychology_analysis']}\n"
+                        psychology_insights.append(follow_up['psychology_analysis'])
+                
                 interview_content += "\n"
             
-            # LLMでサマリを生成
+            # LLMでサマリを生成（深層心理と根拠を統合）
             summary_prompt = f"""
-            以下のペルソナへのインタビュー内容を読み、2つの観点からサマリを作成してください：
+            以下のペルソナへのインタビュー内容を読み、深層心理分析を踏まえて包括的なサマリを作成してください：
             
-            1. **主な発見**: このペルソナのインタビューから得られた最も重要な気づきや発見を4-5行で詳細に記述
-            2. **主な示唆**: この発見から導かれるマーケティング上の示唆を4-5行で具体的に記述
+            1. **結論**: このペルソナのインタビューから得られた最も重要な結論を3-4行で明確に記述
+            2. **根拠となる発言**: 結論を裏付ける具体的な発言を2-3つ引用（「〜」という発言）
+            3. **深層心理**: 発言の裏にある深層心理や本音を2-3行で分析
+            4. **マーケティング示唆**: 上記を踏まえた具体的なマーケティング戦略を3-4行で提示
             
             ペルソナ情報:
             {persona.raw_text}
             
-            インタビュー内容:
+            インタビュー内容（発言と深層心理分析を含む）:
             {interview_content}
             
             出力形式:
-            【主な発見】
-            [発見内容を4-5行で詳細に記述]
+            【結論】
+            [最も重要な結論を3-4行で明確に]
             
-            【主な示唆】
-            [示唆内容を4-5行で具体的に記述]
+            【根拠となる発言】
+            • 「[具体的な発言1]」
+            • 「[具体的な発言2]」
+            • 「[具体的な発言3]」（オプション）
+            
+            【深層心理】
+            [発言の裏にある本音や感情を2-3行で]
+            
+            【マーケティング示唆】
+            [具体的な戦略やアプローチを3-4行で]
             """
             
             summary_text = generate_text(summary_prompt, temperature=0.6)
             
-            # サマリをパース
-            main_findings = ""
-            main_implications = ""
+            # サマリをパース（新形式対応）
+            conclusion = ""
+            evidence = ""
+            psychology = ""
+            implications = ""
             
-            if "【主な発見】" in summary_text:
-                findings_part = summary_text.split("【主な発見】")[1]
-                if "【主な示唆】" in findings_part:
-                    main_findings = findings_part.split("【主な示唆】")[0].strip()
-                    main_implications = findings_part.split("【主な示唆】")[1].strip()
-                else:
-                    main_findings = findings_part.strip()
+            if "【結論】" in summary_text:
+                parts = summary_text.split("【結論】")[1]
+                if "【根拠となる発言】" in parts:
+                    conclusion = parts.split("【根拠となる発言】")[0].strip()
+                    parts = parts.split("【根拠となる発言】")[1]
+                    
+                    if "【深層心理】" in parts:
+                        evidence = parts.split("【深層心理】")[0].strip()
+                        parts = parts.split("【深層心理】")[1]
+                        
+                        if "【マーケティング示唆】" in parts:
+                            psychology = parts.split("【マーケティング示唆】")[0].strip()
+                            implications = parts.split("【マーケティング示唆】")[1].strip()
+            
+            # レスポンス用に整形
+            formatted_summary = f"""
+【結論】
+{conclusion}
+
+【根拠となる発言】
+{evidence}
+
+【深層心理】
+{psychology}
+
+【マーケティング示唆】
+{implications}
+""".strip()
             
             summaries.append({
                 "persona_name": persona.name,
-                "main_findings": main_findings,
-                "main_implications": main_implications
+                "main_findings": conclusion,  # 後方互換性のため
+                "main_implications": implications,  # 後方互換性のため
+                "full_summary": formatted_summary,  # 新しい完全なサマリ
+                "evidence": evidence,  # 根拠となる発言
+                "psychology": psychology  # 深層心理
             })
         
         return {"summaries": summaries}
@@ -1793,6 +2123,83 @@ async def generate_interview_summary():
     except Exception as e:
         logger.error(f"インタビューサマリ生成エラー: {e}")
         raise HTTPException(status_code=500, detail=f"インタビューサマリの生成に失敗しました: {e}")
+
+from fastapi.responses import StreamingResponse
+import pptx_generator
+
+
+class ExportPptxRequest(BaseModel):
+    session_id: str = "default"
+    include_final_analysis: bool = True
+    include_custom_analysis: bool = True
+
+
+@app.post("/api/export-pptx")
+async def export_pptx(request: ExportPptxRequest):
+    """マーケティングインサイトレポートをPowerPointとしてエクスポート"""
+    try:
+        current_session = get_session(request.session_id)
+
+        project_info = current_session.get("project_info")
+        if not project_info:
+            raise HTTPException(status_code=400, detail="プロジェクト情報がありません")
+
+        topic = project_info.topic if hasattr(project_info, "topic") else str(project_info)
+        products = []
+        if hasattr(project_info, "products_services"):
+            products = [p.dict() if hasattr(p, "dict") else p for p in project_info.products_services]
+
+        personas_data = []
+        for p in current_session.get("selected_personas", current_session.get("personas", [])):
+            if hasattr(p, "name"):
+                personas_data.append({"name": p.name, "details": p.details})
+            elif isinstance(p, dict):
+                personas_data.append(p)
+
+        analysis_text = current_session.get("analysis", "")
+        final_analysis = current_session.get("final_analysis", "") if request.include_final_analysis else None
+        custom_analysis = current_session.get("custom_final_analysis", None) if request.include_custom_analysis else None
+
+        # LLMでプレゼンターノートを生成
+        presenter_notes = None
+        if analysis_text:
+            try:
+                notes_prompt = f"""以下のマーケティング分析結果から、プレゼンター向けの説明メモを200文字以内で簡潔に作成してください。
+重要なポイントと話すべきハイライトをまとめてください。
+
+分析結果:
+{analysis_text[:1500]}
+"""
+                presenter_notes = generate_text(notes_prompt, temperature=0.5, session_id=request.session_id)
+            except Exception:
+                logger.warning("プレゼンターノート生成をスキップ")
+
+        pptx_bytes = pptx_generator.generate_report(
+            topic=topic,
+            products=products,
+            personas=personas_data,
+            analysis_text=analysis_text,
+            custom_analysis=custom_analysis,
+            final_analysis=final_analysis,
+            presenter_notes=presenter_notes,
+        )
+
+        filename = f"tames_insight_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
+
+        return StreamingResponse(
+            io.BytesIO(pptx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PPTX生成エラー: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"レポート生成に失敗しました: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -1816,4 +2223,4 @@ if __name__ == "__main__":
         logger.warning("⚠️ SSL証明書が見つかりません。HTTPモードで起動します")
         logger.warning(f"証明書ファイル: {cert_file}")
         logger.warning(f"秘密鍵ファイル: {key_file}")
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

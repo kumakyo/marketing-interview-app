@@ -19,6 +19,8 @@ interface ComprehensiveAnalysisViewProps {
   onAdditionalInterview?: () => void;
   loading?: boolean;
   forceActiveTab?: 'summary' | 'insights' | number;
+  onExportPptx?: () => void;
+  exportingPptx?: boolean;
 }
 
 const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
@@ -27,7 +29,9 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
   customAnalysisResults,
   onAdditionalInterview,
   loading,
-  forceActiveTab
+  forceActiveTab,
+  onExportPptx,
+  exportingPptx,
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'insights' | number>('summary');
 
@@ -211,18 +215,43 @@ const ComprehensiveAnalysisView: React.FC<ComprehensiveAnalysisViewProps> = ({
         )}
       </div>
 
-      {/* 追加質問インタビューボタン */}
-      {onAdditionalInterview && activeTab === 'insights' && (
-        <div className="mt-8 flex justify-center">
+      {/* アクションボタン */}
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        {onAdditionalInterview && activeTab === 'insights' && (
           <button
             onClick={onAdditionalInterview}
             disabled={loading}
-            className="bg-orange-600 text-white py-3 px-8 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="bg-orange-600 text-white py-3 px-8 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
           >
             {loading ? '処理中...' : '+ 追加質問インタビューを実施'}
           </button>
-        </div>
-      )}
+        )}
+
+        {onExportPptx && (
+          <button
+            onClick={onExportPptx}
+            disabled={exportingPptx}
+            className="btn-primary flex items-center gap-2 py-3 px-8"
+          >
+            {exportingPptx ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                レポート生成中...
+              </>
+            ) : (
+              <>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                PowerPointでダウンロード
+              </>
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 };
