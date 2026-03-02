@@ -726,13 +726,42 @@ export default function Home() {
   return (
           <div className="max-w-4xl mx-auto space-y-8">
             {showProgress && <StepProgress />}
-            
+
+            {/* AI Survey 風タイトル */}
+            <h2 className="text-3xl font-bold text-gray-900 text-center">AI Interview</h2>
+
+            {/* 機能カードグリッド（AI Survey のホーム画面に合わせる） */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+                ), title: 'ペルソナ設定', desc: 'AIがインタビュー対象者を生成' },
+                { icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" /></svg>
+                ), title: 'インタビュー', desc: 'AI ペルソナへの深層インタビュー' },
+                { icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
+                ), title: '分析結果', desc: 'マーケティングインサイトを抽出' },
+                { icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                ), title: 'レポート', desc: 'PowerPoint でレポート出力' },
+              ].map((item) => (
+                <div key={item.title} className="card p-5 hover:shadow-md transition-shadow">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 mb-3">
+                    {item.icon}
+                  </div>
+                  <h3 className="font-semibold text-gray-900">{item.title}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+
             {/* 履歴表示ボタン */}
             {interviewHistory.length > 0 && (
-              <div className="text-center mb-6">
+              <div className="text-center">
                 <button
                   onClick={() => setShowHistory(!showHistory)}
-                  className="bg-gray-600 text-white py-2 px-6 rounded-lg hover:bg-gray-700 font-medium"
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
                   {showHistory ? '履歴を閉じる' : '過去の結果を見る'}
                 </button>
@@ -845,7 +874,7 @@ export default function Home() {
                 <h3 className="text-xl font-semibold text-gray-900">商品・サービス情報</h3>
                 <button
                   onClick={addProduct}
-                  className="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 font-medium"
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
                   + 商品・サービスを追加
                 </button>
@@ -867,9 +896,9 @@ export default function Home() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-semibold text-gray-900">競合商品・サービス情報</h3>
-                <button
+              <button
                   onClick={addCompetitor}
-                  className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 font-medium"
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
                   + 競合を追加
                 </button>
@@ -893,76 +922,40 @@ export default function Home() {
             </div>
 
             {/* 分析タイプ選択 */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 space-y-4">
-              <h3 className="font-semibold text-blue-900 mb-4 text-xl">📊 分析目的の選択（複数選択可）</h3>
-              <p className="text-sm text-blue-700 mb-4">
-                インタビューの分析目的を選択してください。最終レポートで選択した内容に沿った分析が行われます。
+            <div className="card p-6 space-y-4">
+              <h3 className="font-bold text-gray-900 text-xl">分析目的の選択</h3>
+              <p className="text-sm text-blue-600">
+                インタビューの分析目的を選択してください（複数選択可）
               </p>
               
               <div className="space-y-3">
-                <label className="flex items-start p-3 bg-white border-2 border-blue-200 rounded-lg hover:border-blue-400 cursor-pointer transition">
-                  <input
-                    type="checkbox"
-                    checked={selectedAnalysisTypes.includes('market_structure')}
-                  onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedAnalysisTypes([...selectedAnalysisTypes, 'market_structure']);
-                      } else {
-                        setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'market_structure'));
-                    }
-                  }}
-                    className="mt-1 mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-              <div>
-                    <span className="font-medium text-gray-900">1. 市場構造の理解</span>
-                    <p className="text-sm text-gray-600 mt-1">
-                      市場全体の動向、顧客セグメント、競合状況を把握し、ビジネスチャンスを見出す分析
-                </p>
+                {[
+                  { key: 'market_structure', label: '1. 市場構造の理解', desc: '市場全体の動向、顧客セグメント、競合状況を把握し、ビジネスチャンスを見出す分析' },
+                  { key: 'customer_needs', label: '2. ある特定の消費者ニーズの確認', desc: '特定の顧客層のニーズや課題を深掘りし、商品・サービスとのマッチングを検証する分析' },
+                  { key: 'product_improvement', label: '3. 商品・サービスのブラッシュアップ', desc: '現在の商品・サービスの改善点を発見し、より魅力的な価値提案を作り上げる分析' },
+                ].map((item) => (
+                  <label key={item.key} className={`flex items-start p-3 rounded-lg border cursor-pointer transition ${
+                    selectedAnalysisTypes.includes(item.key) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAnalysisTypes.includes(item.key)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedAnalysisTypes([...selectedAnalysisTypes, item.key]);
+                        } else {
+                          setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== item.key));
+                        }
+                      }}
+                      className="mt-1 mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <div>
+                      <span className="font-medium text-gray-900">{item.label}</span>
+                      <p className="text-sm text-gray-500 mt-0.5">{item.desc}</p>
+                    </div>
+                  </label>
+                ))}
               </div>
-                </label>
-                
-                <label className="flex items-start p-3 bg-white border-2 border-blue-200 rounded-lg hover:border-blue-400 cursor-pointer transition">
-                  <input
-                    type="checkbox"
-                    checked={selectedAnalysisTypes.includes('customer_needs')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedAnalysisTypes([...selectedAnalysisTypes, 'customer_needs']);
-                      } else {
-                        setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'customer_needs'));
-                      }
-                    }}
-                    className="mt-1 mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                        <div>
-                    <span className="font-medium text-gray-900">2. ある特定の消費者ニーズの確認</span>
-                    <p className="text-sm text-gray-600 mt-1">
-                      特定の顧客層のニーズや課題を深掘りし、商品・サービスとのマッチングを検証する分析
-                          </p>
-                        </div>
-                </label>
-                
-                <label className="flex items-start p-3 bg-white border-2 border-blue-200 rounded-lg hover:border-blue-400 cursor-pointer transition">
-                  <input
-                    type="checkbox"
-                    checked={selectedAnalysisTypes.includes('product_improvement')}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedAnalysisTypes([...selectedAnalysisTypes, 'product_improvement']);
-                      } else {
-                        setSelectedAnalysisTypes(selectedAnalysisTypes.filter(t => t !== 'product_improvement'));
-                            }
-                          }}
-                    className="mt-1 mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <div>
-                    <span className="font-medium text-gray-900">3. 商品・サービスのブラッシュアップ</span>
-                    <p className="text-sm text-gray-600 mt-1">
-                      現在の商品・サービスの改善点を発見し、より魅力的な価値提案を作り上げる分析
-                    </p>
-                  </div>
-              </label>
-            </div>
 
               {selectedAnalysisTypes.length === 0 && (
                 <p className="text-sm text-red-600 mt-2">
@@ -972,8 +965,8 @@ export default function Home() {
             </div>
 
             {/* インタビュー対象者選定設定 */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-              <h3 className="font-semibold text-gray-900 mb-4 text-xl">インタビュー対象者選定設定</h3>
+            <div className="card p-6 space-y-4">
+              <h3 className="font-bold text-gray-900 text-xl">インタビュー対象者選定設定</h3>
               
               <div>
                 <label htmlFor="personaCount" className="block text-sm font-medium text-gray-700 mb-2">
@@ -1042,7 +1035,7 @@ export default function Home() {
                   !p.name.trim() || !p.target_audience.trim() || !p.benefits.trim() || 
                   !p.benefit_reason.trim() || !p.basic_info.trim()
                 )}
-                className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="btn-primary py-3 px-8"
               >
                 {loading ? <LoadingSpinner size="sm" /> : 'インタビュー対象者を選定'}
               </button>
@@ -1050,7 +1043,7 @@ export default function Home() {
               {personas.length > 0 && !loading && (
                 <button
                   onClick={() => setStep(1)}
-                  className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 font-medium flex items-center gap-2"
+                  className="btn-primary py-3 px-8 flex items-center gap-2"
                 >
                   <span>次へ</span>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1078,13 +1071,10 @@ export default function Home() {
         return (
           <div className="space-y-6">
             {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">💬 インタビュー対象者を選択</h2>
-              <p className="text-gray-600 mb-2">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">インタビュー対象者を選択</h2>
+              <p className="text-sm text-blue-600 mt-1">
                 インタビューしたい{interviewCount}名の対象者を選択してください ({selectedPersonas.length}/{interviewCount})
-              </p>
-              <p className="text-sm text-gray-500">
-                カードをクリックして選択してください
               </p>
             </div>
             
@@ -1103,14 +1093,14 @@ export default function Home() {
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => setStep(0)}
-                className="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-medium"
+                className="btn-secondary py-3 px-6"
               >
                 戻る
               </button>
               <button
                 onClick={handleStartInterview}
                 disabled={loading || selectedPersonas.length !== interviewCount}
-                className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="btn-primary py-3 px-8"
               >
                 {loading ? <LoadingSpinner size="sm" /> : 'インタビューを開始'}
               </button>
@@ -1122,17 +1112,17 @@ export default function Home() {
         return (
           <div className="max-w-4xl mx-auto space-y-6">
             {showProgress && <StepProgress />}
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">質問内容</h2>
-              <p className="text-gray-600">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">質問内容</h2>
+              <p className="text-sm text-blue-600 mt-1">
                 以下の質問でインタビューを実行します。質問は編集可能です。
               </p>
             </div>
             
             {/* Excelアップロード */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-blue-900 mb-2">Excelファイルから質問を読み込み</h3>
-              <p className="text-sm text-blue-700 mb-3">
+            <div className="card p-4">
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Excelファイルから質問を読み込み</h3>
+              <p className="text-sm text-gray-500 mb-3">
                 Excelファイルの最初の列から質問を自動で読み取ります
               </p>
               <input
@@ -1147,10 +1137,8 @@ export default function Home() {
             {/* 質問操作ボタン */}
             <div className="flex justify-center space-x-4 mb-6">
               <button
-                onClick={() => {
-                  setQuestions([...questions, '']);
-                }}
-                className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 font-medium flex items-center space-x-2"
+                onClick={() => setQuestions([...questions, ''])}
+                className="btn-primary py-2 px-4 text-sm flex items-center space-x-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1171,7 +1159,7 @@ export default function Home() {
                   }
                 }}
                 disabled={loading}
-                className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center space-x-2"
+                className="btn-secondary py-2 px-4 text-sm flex items-center space-x-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1180,10 +1168,8 @@ export default function Home() {
               </button>
               
               <button
-                onClick={() => {
-                  setQuestions([]);
-                }}
-                className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 font-medium flex items-center space-x-2"
+                onClick={() => setQuestions([])}
+                className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1236,14 +1222,14 @@ export default function Home() {
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => setStep(1)}
-                className="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 font-medium"
+                className="btn-secondary py-3 px-6"
               >
                 戻る
               </button>
               <button
                 onClick={handleConductInterview}
                 disabled={loading || questions.length === 0 || questions.some(q => !q.trim())}
-                className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="btn-primary py-3 px-8"
               >
                 {loading ? <LoadingSpinner size="sm" text="インタビューを実行中..." /> : 'インタビューを実行'}
               </button>
@@ -1451,7 +1437,7 @@ export default function Home() {
                         setError('履歴の保存に失敗しました: ' + (err.response?.data?.detail || err.message));
                       }
                     }}
-                    className="bg-green-600 text-white py-3 px-8 rounded-lg hover:bg-green-700 font-medium"
+                    className="btn-primary py-3 px-8"
                   >
                     結果を保存
                   </button>
@@ -1479,7 +1465,7 @@ export default function Home() {
                       setPersonaSummaries([]);
                       setAdditionalQuestions(['', '', '', '', '']);
                     }}
-                    className="bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 font-medium"
+                    className="btn-secondary py-3 px-8"
                   >
                     新しいインタビューを開始
                   </button>
@@ -1524,7 +1510,7 @@ export default function Home() {
                       element.click();
                       document.body.removeChild(element);
                     }}
-                    className="bg-gray-600 text-white py-3 px-8 rounded-lg hover:bg-gray-700 font-medium"
+                    className="btn-secondary py-3 px-8"
                   >
                     レポートをダウンロード
                   </button>
